@@ -1,6 +1,22 @@
 #include "selfdrive/pandad/pandad.h"
 #include "cereal/messaging/messaging.h"
 #include "common/swaglog.h"
+#include "json11.hpp"
+
+#include <unordered_set>
+
+static bool isVwMebMqbevoPlatform(const std::string &platform) {
+  static const std::unordered_set<std::string> platforms = {
+    "VOLKSWAGEN_ID3_MK1", "VOLKSWAGEN_ID3_MK2",
+    "VOLKSWAGEN_ID4_MK1", "VOLKSWAGEN_ID4_MK2",
+    "VOLKSWAGEN_GOLF_MK8",
+    "AUDI_Q4_MK1", "AUDI_Q4_MK2",
+    "CUPRA_BORN_MK1",
+    "SKODA_ENYAQ_MK1", "SKODA_ENYAQ_MK2",
+    "SEAT_LEON_MK4",
+  };
+  return platforms.count(platform) > 0;
+}
 
 void PandaSafety::configureSafetyMode(bool is_onroad) {
   // Bring CAN FD up for VW MEB/MQBevo before the car is identified (see ensureCanFdForCachedMeb).
@@ -97,29 +113,58 @@ void PandaSafety::ensureCanFdForCachedMeb() {
   // powertrain bus. The real car safety model is only set onroad (setSafetyMode, gated on
   // FirmwareQueryDone + ControlsReady), but going onroad needs ignition, so CAN FD must already
   // be up while still offroad/noOutput. The panda zeroes can_data_speed on every safety-model
-  // change until a bus is explicitly requested via 0xf9, so request FD here from the *cached*
-  // CarParams. Gated on the cached safety model → only VW MEB/MQBevo devices are touched, and the
+  // change until a bus is explicitly requested via 0xf9, so request FD here from either the
+  // UI-selected CarPlatformBundle or the cached CarParams. Gated on MEB/MQBevo only, and the
   // panda latches the request (canfd_requested) so it survives subsequent safety-model changes.
   if (canfd_configured_) {
     return;
   }
 
-  std::string cp_bytes = params_.get("CarParamsPersistent");
-  if (cp_bytes.empty()) {
-    return;  // no cache yet (e.g. first-ever setup) — retry next loop
+  bool is_meb = false;
+  const char *source = nullptr;
+
+  // Method A: UI manual platform selection (e.g. Volkswagen ID.3 2024-25 → VOLKSWAGEN_ID3_MK2)
+  std::string bundle_bytes = params_.get("CarPlatformBundle");
+  if (!bundle_bytes.empty()) {
+    std::string err;
+    json11::Json bundle = json11::Json::parse(bundle_bytes, err);
+    if (err.empty() && bundle.is_object()) {
+      std::string platform = bundle["platform"].string_value();
+      if (isVwMebMqbevoPlatform(platform)) {
+        is_meb = true;
+        source = "bundle";
+      } else {
+        canfd_configured_ = true;  // manual selection is a non-MEB platform
+        return;
+      }
+    }
   }
 
-  AlignedBuffer aligned_buf;
-  capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
-  cereal::CarParams::Reader car_params = cmsg.getRoot<cereal::CarParams>();
+  // Method B: cached car fingerprint (CarParamsPersistent)
+  if (!is_meb) {
+    std::string cp_bytes = params_.get("CarParamsPersistent");
+    if (cp_bytes.empty()) {
+      return;  // no cache yet (e.g. first-ever setup) — retry next loop
+    }
 
-  bool is_meb = false;
-  auto safety_configs = car_params.getSafetyConfigs();
-  for (int i = 0; i < safety_configs.size(); ++i) {
-    auto model = safety_configs[i].getSafetyModel();
-    if ((model == cereal::CarParams::SafetyModel::VOLKSWAGEN_MEB) ||
-        (model == cereal::CarParams::SafetyModel::VOLKSWAGEN_MQB_EVO)) {
-      is_meb = true;
+    AlignedBuffer aligned_buf;
+    capnp::FlatArrayMessageReader cmsg(aligned_buf.align(cp_bytes.data(), cp_bytes.size()));
+    cereal::CarParams::Reader car_params = cmsg.getRoot<cereal::CarParams>();
+
+    auto safety_configs = car_params.getSafetyConfigs();
+    for (int i = 0; i < safety_configs.size(); ++i) {
+      auto model = safety_configs[i].getSafetyModel();
+      if ((model == cereal::CarParams::SafetyModel::VOLKSWAGEN_MEB) ||
+          (model == cereal::CarParams::SafetyModel::VOLKSWAGEN_MQB_EVO)) {
+        is_meb = true;
+        source = "cache";
+        break;
+      }
+    }
+
+    if (!is_meb) {
+      canfd_configured_ = true;  // cached params exist but not MEB/MQBevo
+      return;
     }
   }
 
@@ -129,9 +174,9 @@ void PandaSafety::ensureCanFdForCachedMeb() {
         pandas_[i]->set_data_speed_kbps(bus, 2000);  // 2 Mbps CAN FD data phase
       }
     }
-    LOGW("VW MEB/MQBevo cached: requested CAN FD (2Mbps) on all buses for pre-ignition CAN FD");
+    LOGW("VW MEB: requested CAN FD (2Mbps) on Bus 0/1/2 for pre-ignition CAN FD (%s)", source);
+    canfd_configured_ = true;
   }
-  canfd_configured_ = true;
 }
 
 bool PandaSafety::getOffroadMode() {

@@ -16,12 +16,16 @@ from openpilot.common.utils import get_upload_stream
 from openpilot.common.params import Params
 from openpilot.common.realtime import set_core_affinity
 from openpilot.system.hardware.hw import Paths
+from openpilot.system.loggerd.config import SEGMENT_LENGTH
 from openpilot.system.loggerd.xattr_cache import getxattr, setxattr
 from openpilot.common.swaglog import cloudlog
 
 NetworkType = log.DeviceState.NetworkType
 UPLOAD_ATTR_NAME = 'user.upload'
 UPLOAD_ATTR_VALUE = b'1'
+
+MIN_UPLOAD_DURATION_S = float(os.getenv("UPLOAD_MIN_DURATION_S", "120"))  # 2 minutes
+MIN_UPLOAD_DISTANCE_MI = float(os.getenv("UPLOAD_MIN_DISTANCE_MI", "1"))  # displayed as 0 mi below this
 
 MAX_UPLOAD_SIZES = {
   "qlog": 25*1e6,  # can't be too restrictive here since we use qlogs to find
@@ -73,6 +77,69 @@ def clear_locks(root: str) -> None:
       cloudlog.exception("clear_locks failed")
 
 
+def get_route_base(logdir: str) -> str | None:
+  if logdir in ("crash", "boot") or "--" not in logdir:
+    return None
+  return logdir.rpartition("--")[0]
+
+
+def get_route_segments(root: str, route_base: str) -> list[str]:
+  prefix = route_base + "--"
+  try:
+    return sorted(d for d in os.listdir(root) if d.startswith(prefix) and os.path.isdir(os.path.join(root, d)))
+  except OSError:
+    return []
+
+
+def segment_has_lock(root: str, segment: str) -> bool:
+  path = os.path.join(root, segment)
+  try:
+    return any(name.endswith(".lock") for name in os.listdir(path))
+  except OSError:
+    return True
+
+
+def qlog_segment_stats(qlog_path: str) -> tuple[float, float]:
+  try:
+    import zstandard as zstd
+    from cereal import log as capnp_log
+  except ImportError:
+    return 0.0, 0.0
+
+  try:
+    with open(qlog_path, "rb") as f:
+      data = f.read()
+  except OSError:
+    return 0.0, 0.0
+
+  if qlog_path.endswith(".zst") or data.startswith(b"\x28\xB5\x2F\xFD"):
+    try:
+      data = zstd.decompress(data)
+    except zstd.ZstdError:
+      return 0.0, 0.0
+
+  first_t = last_t = None
+  last_t_cs = None
+  distance_m = 0.0
+  try:
+    for evt in capnp_log.Event.read_multiple_bytes(data):
+      t = evt.logMonoTime
+      if first_t is None:
+        first_t = t
+      last_t = t
+      if evt.which() == "carState":
+        v = max(float(evt.carState.vEgo), 0.0)
+        if last_t_cs is not None and t > last_t_cs:
+          distance_m += v * ((t - last_t_cs) / 1e9)
+        last_t_cs = t
+  except Exception:
+    return 0.0, 0.0
+
+  if first_t is None or last_t is None or last_t <= first_t:
+    return 0.0, distance_m
+  return (last_t - first_t) / 1e9, distance_m
+
+
 class Uploader:
   def __init__(self, dongle_id: str, root: str):
     self.dongle_id = dongle_id
@@ -86,10 +153,79 @@ class Uploader:
 
     self.immediate_folders = ["crash/", "boot/"]
     self.immediate_priority = {"qlog": 0, "qlog.zst": 0, "qcamera.ts": 1}
+    self._route_stats_cache: dict[str, tuple[float, float] | None] = {}
+    self._route_skip_cache: dict[str, bool] = {}
+
+  def _get_route_stats(self, route_base: str) -> tuple[float, float] | None:
+    if route_base in self._route_stats_cache:
+      return self._route_stats_cache[route_base]
+
+    segments = get_route_segments(self.root, route_base)
+    if not segments or any(segment_has_lock(self.root, s) for s in segments):
+      self._route_stats_cache[route_base] = None
+      return None
+
+    total_duration = 0.0
+    total_distance_m = 0.0
+    for segment in segments:
+      qlog_path = os.path.join(self.root, segment, "qlog")
+      if not os.path.isfile(qlog_path):
+        self._route_stats_cache[route_base] = None
+        return None
+      duration, distance_m = qlog_segment_stats(qlog_path)
+      total_duration += duration if duration > 0 else SEGMENT_LENGTH
+      total_distance_m += distance_m
+
+    stats = (total_duration, total_distance_m * 0.000621371)
+    self._route_stats_cache[route_base] = stats
+    return stats
+
+  def _should_defer_route_upload(self, route_base: str, offroad: bool) -> bool:
+    if offroad:
+      return False
+    stats = self._get_route_stats(route_base)
+    if stats is None:
+      return True
+    duration, distance_mi = stats
+    return duration < MIN_UPLOAD_DURATION_S or distance_mi < MIN_UPLOAD_DISTANCE_MI
+
+  def _should_skip_route_upload(self, route_base: str, offroad: bool) -> bool:
+    if route_base in self._route_skip_cache:
+      return self._route_skip_cache[route_base]
+    if not offroad:
+      self._route_skip_cache[route_base] = False
+      return False
+
+    stats = self._get_route_stats(route_base)
+    if stats is None:
+      self._route_skip_cache[route_base] = False
+      return False
+
+    duration, distance_mi = stats
+    skip = duration < MIN_UPLOAD_DURATION_S or distance_mi < MIN_UPLOAD_DISTANCE_MI
+    if skip:
+      cloudlog.event("uploader_route_skipped", route=route_base, duration_s=duration, distance_mi=distance_mi)
+    self._route_skip_cache[route_base] = skip
+    return skip
+
+  def _mark_route_uploaded(self, route_base: str) -> None:
+    for segment in get_route_segments(self.root, route_base):
+      path = os.path.join(self.root, segment)
+      try:
+        for name in os.listdir(path):
+          fn = os.path.join(path, name)
+          if os.path.isfile(fn) and not name.endswith(".lock"):
+            try:
+              setxattr(fn, UPLOAD_ATTR_NAME, UPLOAD_ATTR_VALUE)
+            except OSError:
+              cloudlog.event("uploader_setxattr_failed", key=os.path.join(segment, name), fn=fn)
+      except OSError:
+        continue
 
   def list_upload_files(self, metered: bool) -> Iterator[tuple[str, str, str]]:
     r = self.params.get("AthenadRecentlyViewedRoutes")
     requested_routes = [] if r is None else [route for route in r.split(",") if route]
+    offroad = self.params.get_bool("IsOffroad")
 
     for logdir in listdir_by_creation(self.root):
       path = os.path.join(self.root, logdir)
@@ -100,6 +236,14 @@ class Uploader:
 
       if any(name.endswith(".lock") for name in names):
         continue
+
+      route_base = get_route_base(logdir)
+      if route_base is not None:
+        if self._should_defer_route_upload(route_base, offroad):
+          continue
+        if self._should_skip_route_upload(route_base, offroad):
+          self._mark_route_uploaded(route_base)
+          continue
 
       for name in sorted(names, key=lambda n: self.immediate_priority.get(n, 1000)):
         key = os.path.join(logdir, name)

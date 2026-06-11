@@ -17,6 +17,7 @@ a.out
 .hypothesis
 .cache/
 
+/docs/
 /docs_site/
 
 *.mp4
