@@ -170,6 +170,8 @@ class Uploader:
     for segment in segments:
       qlog_path = os.path.join(self.root, segment, "qlog")
       if not os.path.isfile(qlog_path):
+        qlog_path = os.path.join(self.root, segment, "qlog.zst")
+      if not os.path.isfile(qlog_path):
         self._route_stats_cache[route_base] = None
         return None
       duration, distance_m = qlog_segment_stats(qlog_path)
