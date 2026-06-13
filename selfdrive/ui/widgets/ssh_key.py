@@ -5,7 +5,7 @@ import copy
 from collections.abc import Callable
 from enum import Enum
 
-from openpilot.common.params import Params
+from openpilot.common.network_time import sync_network_time
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -121,6 +121,12 @@ class SshKeyAction(ItemAction):
 
     except requests.exceptions.Timeout:
       self._error_message = tr("Request timed out")
+      self._state = SshKeyActionState.ADD
+    except requests.exceptions.SSLError:
+      if sync_network_time(min_interval=5.0, force=True):
+        self._error_message = tr("Device time synced; please retry")
+      else:
+        self._error_message = tr("Device time is invalid; connect to network and retry")
       self._state = SshKeyActionState.ADD
     except Exception:
       self._error_message = tr("No SSH keys found for user '{}'").format(username)

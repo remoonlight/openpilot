@@ -6,6 +6,7 @@ from typing import NoReturn
 
 import cereal.messaging as messaging
 from openpilot.common.time_helpers import min_date, system_time_valid
+from openpilot.common.network_time import sync_network_time
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
 from openpilot.common.gps import get_gps_location_service
@@ -30,7 +31,7 @@ def main() -> NoReturn:
     - getting the current time from GPS
     - publishing the time in the logs
 
-    AGNOS will also use NTP to update the time.
+    When the system clock is invalid, sync from network HTTP Date headers.
   """
 
   params = Params()
@@ -40,6 +41,9 @@ def main() -> NoReturn:
   sm = messaging.SubMaster([gps_location_service])
   while True:
     sm.update(1000)
+
+    if not system_time_valid():
+      sync_network_time(min_interval=30.0)
 
     msg = messaging.new_message('clocks')
     msg.valid = system_time_valid()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import ssl
 import threading
 import time
 import urllib.request
@@ -11,7 +12,7 @@ import shutil
 
 import pyray as rl
 
-from openpilot.common.utils import run_cmd
+from openpilot.common.network_time import sync_network_time
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.ui.lib.scroll_panel import GuiScrollPanel
 from openpilot.system.ui.lib.application import gui_app, FontWeight, FONT_SCALE
@@ -228,6 +229,10 @@ class Setup(Widget):
             self.wifi_connected.set()
           else:
             self.wifi_connected.clear()
+        except urllib.error.URLError as e:
+          if isinstance(e.reason, ssl.SSLCertVerificationError):
+            sync_network_time(min_interval=5.0, force=True)
+          self.network_connected.clear()
         except Exception:
           self.network_connected.clear()
       time.sleep(1)
