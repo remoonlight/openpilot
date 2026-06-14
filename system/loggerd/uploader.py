@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import io
 import json
 import os
 import random
@@ -99,9 +100,28 @@ def segment_has_lock(root: str, segment: str) -> bool:
     return True
 
 
+def _decompress_zst_bytes(data: bytes) -> bytes | None:
+  import zstandard as zstd
+
+  dctx = zstd.ZstdDecompressor()
+  try:
+    return dctx.decompress(data)
+  except zstd.ZstdError:
+    try:
+      out = io.BytesIO()
+      with dctx.stream_reader(io.BytesIO(data)) as reader:
+        while True:
+          chunk = reader.read(65536)
+          if not chunk:
+            break
+          out.write(chunk)
+      return out.getvalue()
+    except zstd.ZstdError:
+      return None
+
+
 def qlog_segment_stats(qlog_path: str) -> tuple[float, float]:
   try:
-    import zstandard as zstd
     from cereal import log as capnp_log
   except ImportError:
     return 0.0, 0.0
@@ -113,10 +133,10 @@ def qlog_segment_stats(qlog_path: str) -> tuple[float, float]:
     return 0.0, 0.0
 
   if qlog_path.endswith(".zst") or data.startswith(b"\x28\xB5\x2F\xFD"):
-    try:
-      data = zstd.decompress(data)
-    except zstd.ZstdError:
+    decompressed = _decompress_zst_bytes(data)
+    if decompressed is None:
       return 0.0, 0.0
+    data = decompressed
 
   first_t = last_t = None
   last_t_cs = None
