@@ -15,6 +15,7 @@ from collections.abc import Callable
 import pyray as rl
 
 from openpilot.common.network_time import sync_network_time
+from openpilot.common.time_helpers import system_time_valid
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.wifi_manager import WifiManager
@@ -88,7 +89,7 @@ class NetworkConnectivityMonitor:
           if NetworkType is not None and HARDWARE.get_network_type() == NetworkType.wifi:
             self.wifi_connected.set()
         except urllib.error.URLError as e:
-          if isinstance(e.reason, ssl.SSLCertVerificationError):
+          if isinstance(e.reason, ssl.SSLCertVerificationError) and not system_time_valid():
             sync_network_time(min_interval=5.0, force=True)
           self.reset()
         except Exception:

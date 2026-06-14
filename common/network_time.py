@@ -59,10 +59,9 @@ def sync_network_time(min_interval: float = 30.0, *, force: bool = False) -> boo
     return True
 
   now = time.monotonic()
-  if now - _last_sync < min_interval:
+  if not force and now - _last_sync < min_interval:
     return system_time_valid()
 
-  _last_sync = now
   remote = fetch_network_time()
   if remote is None:
     return False
@@ -70,4 +69,5 @@ def sync_network_time(min_interval: float = 30.0, *, force: bool = False) -> boo
   if not set_system_time(remote):
     return False
 
+  _last_sync = now
   return system_time_valid()

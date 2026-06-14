@@ -6,6 +6,7 @@ from collections.abc import Callable
 from enum import Enum
 
 from openpilot.common.network_time import sync_network_time
+from openpilot.common.params import Params
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.lib.text_measure import measure_text_cached

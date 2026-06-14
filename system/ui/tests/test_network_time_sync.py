@@ -84,6 +84,13 @@ class TestNetworkTimeSync(unittest.TestCase):
       network_time._last_sync = time.monotonic()
       self.assertFalse(network_time.sync_network_time(min_interval=30.0))
 
+  @patch.object(network_time, "set_system_time", return_value=True)
+  @patch.object(network_time, "fetch_network_time", return_value=datetime.datetime(2026, 6, 13, 6, 0, 0))
+  @patch.object(network_time, "system_time_valid", side_effect=[False, True])
+  def test_sync_network_time_force_bypasses_rate_limit(self, *_mocks):
+    network_time._last_sync = time.monotonic()
+    self.assertTrue(network_time.sync_network_time(min_interval=30.0, force=True))
+
   @patch.object(network_time.subprocess, "run")
   def test_set_system_time_skips_small_diff(self, mock_run):
     now = datetime.datetime.now()
@@ -98,11 +105,13 @@ class TestNetworkTimeSync(unittest.TestCase):
   def test_mici_setup_syncs_on_ssl_error(self):
     source = (ROOT / "system" / "ui" / "mici_setup.py").read_text(encoding="utf-8")
     self.assertIn("ssl.SSLCertVerificationError", source)
+    self.assertIn("system_time_valid", source)
     self.assertIn("sync_network_time", source)
     self.assertNotIn("systemd-timesyncd", source)
 
   def test_ssh_key_syncs_on_ssl_error(self):
     source = (ROOT / "selfdrive" / "ui" / "widgets" / "ssh_key.py").read_text(encoding="utf-8")
+    self.assertIn("from openpilot.common.params import Params", source)
     self.assertIn("requests.exceptions.SSLError", source)
     self.assertIn("sync_network_time", source)
     self.assertNotIn("systemd-timesyncd", source)
