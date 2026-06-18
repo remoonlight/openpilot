@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import io
 import json
 import os
 import random
@@ -17,20 +16,23 @@ from openpilot.common.utils import get_upload_stream
 from openpilot.common.params import Params
 from openpilot.common.realtime import set_core_affinity
 from openpilot.system.hardware.hw import Paths
-from openpilot.system.loggerd.config import SEGMENT_LENGTH
+from openpilot.system.loggerd.route_upload import (
+  UPLOAD_ATTR_NAME,
+  UPLOAD_ATTR_VALUE,
+  get_directory_sort,
+  get_route_base,
+  mark_route_uploaded,
+  prune_short_routes_from_upload_queue,
+  should_defer_route_upload,
+  should_skip_route_upload,
+)
 from openpilot.system.loggerd.xattr_cache import getxattr, setxattr
 from openpilot.common.swaglog import cloudlog
 
 NetworkType = log.DeviceState.NetworkType
-UPLOAD_ATTR_NAME = 'user.upload'
-UPLOAD_ATTR_VALUE = b'1'
-
-MIN_UPLOAD_DURATION_S = float(os.getenv("UPLOAD_MIN_DURATION_S", "120"))  # 2 minutes
-MIN_UPLOAD_DISTANCE_MI = float(os.getenv("UPLOAD_MIN_DISTANCE_MI", "1"))  # displayed as 0 mi below this
 
 MAX_UPLOAD_SIZES = {
-  "qlog": 25*1e6,  # can't be too restrictive here since we use qlogs to find
-                   # bugs, including ones that can cause massive log sizes
+  "qlog": 25*1e6,
   "qcam": 5*1e6,
 }
 
@@ -50,11 +52,6 @@ class FakeResponse:
     self.request = FakeRequest()
 
 
-def get_directory_sort(d: str) -> list[str]:
-  # ensure old format is sorted sooner
-  o = ["0", ] if d.startswith("2024-") else ["1", ]
-  return o + [s.rjust(10, '0') for s in d.rsplit('--', 1)]
-
 def listdir_by_creation(d: str) -> list[str]:
   if not os.path.isdir(d):
     return []
@@ -67,6 +64,7 @@ def listdir_by_creation(d: str) -> list[str]:
     cloudlog.exception("listdir_by_creation failed")
     return []
 
+
 def clear_locks(root: str) -> None:
   for logdir in os.listdir(root):
     path = os.path.join(root, logdir)
@@ -78,86 +76,21 @@ def clear_locks(root: str) -> None:
       cloudlog.exception("clear_locks failed")
 
 
-def get_route_base(logdir: str) -> str | None:
-  if logdir in ("crash", "boot") or "--" not in logdir:
-    return None
-  return logdir.rpartition("--")[0]
-
-
-def get_route_segments(root: str, route_base: str) -> list[str]:
-  prefix = route_base + "--"
+def sanitize_athenad_upload_queue() -> None:
+  params = Params()
+  raw = params.get("AthenadUploadQueue")
+  if raw is None:
+    return
   try:
-    return sorted(d for d in os.listdir(root) if d.startswith(prefix) and os.path.isdir(os.path.join(root, d)))
-  except OSError:
-    return []
+    items = json.loads(raw)
+  except (TypeError, json.JSONDecodeError):
+    return
+  if not isinstance(items, list):
+    return
 
-
-def segment_has_lock(root: str, segment: str) -> bool:
-  path = os.path.join(root, segment)
-  try:
-    return any(name.endswith(".lock") for name in os.listdir(path))
-  except OSError:
-    return True
-
-
-def _decompress_zst_bytes(data: bytes) -> bytes | None:
-  import zstandard as zstd
-
-  dctx = zstd.ZstdDecompressor()
-  try:
-    return dctx.decompress(data)
-  except zstd.ZstdError:
-    try:
-      out = io.BytesIO()
-      with dctx.stream_reader(io.BytesIO(data)) as reader:
-        while True:
-          chunk = reader.read(65536)
-          if not chunk:
-            break
-          out.write(chunk)
-      return out.getvalue()
-    except zstd.ZstdError:
-      return None
-
-
-def qlog_segment_stats(qlog_path: str) -> tuple[float, float]:
-  try:
-    from cereal import log as capnp_log
-  except ImportError:
-    return 0.0, 0.0
-
-  try:
-    with open(qlog_path, "rb") as f:
-      data = f.read()
-  except OSError:
-    return 0.0, 0.0
-
-  if qlog_path.endswith(".zst") or data.startswith(b"\x28\xB5\x2F\xFD"):
-    decompressed = _decompress_zst_bytes(data)
-    if decompressed is None:
-      return 0.0, 0.0
-    data = decompressed
-
-  first_t = last_t = None
-  last_t_cs = None
-  distance_m = 0.0
-  try:
-    for evt in capnp_log.Event.read_multiple_bytes(data):
-      t = evt.logMonoTime
-      if first_t is None:
-        first_t = t
-      last_t = t
-      if evt.which() == "carState":
-        v = max(float(evt.carState.vEgo), 0.0)
-        if last_t_cs is not None and t > last_t_cs:
-          distance_m += v * ((t - last_t_cs) / 1e9)
-        last_t_cs = t
-  except Exception:
-    return 0.0, 0.0
-
-  if first_t is None or last_t is None or last_t <= first_t:
-    return 0.0, distance_m
-  return (last_t - first_t) / 1e9, distance_m
+  pruned = prune_short_routes_from_upload_queue(items)
+  if len(pruned) != len(items):
+    params.put("AthenadUploadQueue", json.dumps(pruned))
 
 
 class Uploader:
@@ -168,81 +101,26 @@ class Uploader:
 
     self.params = Params()
 
-    # stats for last successfully uploaded file
     self.last_filename = ""
 
     self.immediate_folders = ["crash/", "boot/"]
     self.immediate_priority = {"qlog": 0, "qlog.zst": 0, "qcamera.ts": 1}
-    self._route_stats_cache: dict[str, tuple[float, float] | None] = {}
     self._route_skip_cache: dict[str, bool] = {}
 
-  def _get_route_stats(self, route_base: str) -> tuple[float, float] | None:
-    if route_base in self._route_stats_cache:
-      return self._route_stats_cache[route_base]
-
-    segments = get_route_segments(self.root, route_base)
-    if not segments or any(segment_has_lock(self.root, s) for s in segments):
-      self._route_stats_cache[route_base] = None
-      return None
-
-    total_duration = 0.0
-    total_distance_m = 0.0
-    for segment in segments:
-      qlog_path = os.path.join(self.root, segment, "qlog")
-      if not os.path.isfile(qlog_path):
-        qlog_path = os.path.join(self.root, segment, "qlog.zst")
-      if not os.path.isfile(qlog_path):
-        self._route_stats_cache[route_base] = None
-        return None
-      duration, distance_m = qlog_segment_stats(qlog_path)
-      total_duration += duration if duration > 0 else SEGMENT_LENGTH
-      total_distance_m += distance_m
-
-    stats = (total_duration, total_distance_m * 0.000621371)
-    self._route_stats_cache[route_base] = stats
-    return stats
-
   def _should_defer_route_upload(self, route_base: str, offroad: bool) -> bool:
-    if offroad:
-      return False
-    stats = self._get_route_stats(route_base)
-    if stats is None:
-      return True
-    duration, distance_mi = stats
-    return duration < MIN_UPLOAD_DURATION_S or distance_mi < MIN_UPLOAD_DISTANCE_MI
+    return should_defer_route_upload(route_base, offroad, self.root)
 
   def _should_skip_route_upload(self, route_base: str, offroad: bool) -> bool:
     if route_base in self._route_skip_cache:
       return self._route_skip_cache[route_base]
-    if not offroad:
-      self._route_skip_cache[route_base] = False
-      return False
-
-    stats = self._get_route_stats(route_base)
-    if stats is None:
-      self._route_skip_cache[route_base] = False
-      return False
-
-    duration, distance_mi = stats
-    skip = duration < MIN_UPLOAD_DURATION_S or distance_mi < MIN_UPLOAD_DISTANCE_MI
+    skip = should_skip_route_upload(route_base, offroad, self.root)
     if skip:
-      cloudlog.event("uploader_route_skipped", route=route_base, duration_s=duration, distance_mi=distance_mi)
+      cloudlog.event("uploader_route_skipped", route=route_base)
     self._route_skip_cache[route_base] = skip
     return skip
 
   def _mark_route_uploaded(self, route_base: str) -> None:
-    for segment in get_route_segments(self.root, route_base):
-      path = os.path.join(self.root, segment)
-      try:
-        for name in os.listdir(path):
-          fn = os.path.join(path, name)
-          if os.path.isfile(fn) and not name.endswith(".lock"):
-            try:
-              setxattr(fn, UPLOAD_ATTR_NAME, UPLOAD_ATTR_VALUE)
-            except OSError:
-              cloudlog.event("uploader_setxattr_failed", key=os.path.join(segment, name), fn=fn)
-      except OSError:
-        continue
+    mark_route_uploaded(route_base, self.root)
 
   def list_upload_files(self, metered: bool) -> Iterator[tuple[str, str, str]]:
     r = self.params.get("AthenadRecentlyViewedRoutes")
@@ -270,18 +148,15 @@ class Uploader:
       for name in sorted(names, key=lambda n: self.immediate_priority.get(n, 1000)):
         key = os.path.join(logdir, name)
         fn = os.path.join(path, name)
-        # skip files already uploaded
         try:
           ctime = os.path.getctime(fn)
           is_uploaded = getxattr(fn, UPLOAD_ATTR_NAME) == UPLOAD_ATTR_VALUE
         except OSError:
           cloudlog.event("uploader_getxattr_failed", key=key, fn=fn)
-          # deleter could have deleted, so skip
           continue
         if is_uploaded:
           continue
 
-        # limit uploading on metered connections
         if metered:
           dt = datetime.timedelta(hours=12)
           if logdir in self.immediate_folders and (datetime.datetime.now() - datetime.datetime.fromtimestamp(ctime)) < dt:
@@ -338,7 +213,6 @@ class Uploader:
     cloudlog.event("upload_start", key=key, fn=fn, sz=sz, network_type=network_type, metered=metered)
 
     if sz == 0:
-      # tag files of 0 size as uploaded
       success = True
     elif name in MAX_UPLOAD_SIZES and sz > MAX_UPLOAD_SIZES[name]:
       cloudlog.event("uploader_too_large", key=key, fn=fn, sz=sz)
@@ -369,14 +243,12 @@ class Uploader:
         cloudlog.event("upload_failed", stat=stat, exc=last_exc, key=key, fn=fn, sz=sz, network_type=network_type, metered=metered)
 
     if success:
-      # tag file as uploaded
       try:
         setxattr(fn, UPLOAD_ATTR_NAME, UPLOAD_ATTR_VALUE)
       except OSError:
         cloudlog.event("uploader_setxattr_failed", exc=last_exc, key=key, fn=fn, sz=sz)
 
     return success
-
 
   def step(self, network_type: int, metered: bool) -> bool | None:
     d = self.next_file_to_upload(metered)
@@ -385,7 +257,6 @@ class Uploader:
 
     name, key, fn = d
 
-    # qlogs and bootlogs need to be compressed before uploading
     if key.endswith(('qlog', 'rlog')) or (key.startswith('boot/') and not key.endswith('.zst')):
       key += ".zst"
 
@@ -414,6 +285,7 @@ def main(exit_event: threading.Event | None = None) -> None:
   uploader = Uploader(dongle_id, Paths.log_root())
 
   backoff = 0.1
+  queue_sanitize_counter = 0
   while not exit_event.is_set():
     sm.update(0)
     offroad = params.get_bool("IsOffroad")
@@ -422,6 +294,10 @@ def main(exit_event: threading.Event | None = None) -> None:
       if allow_sleep:
         time.sleep(60 if offroad else 5)
       continue
+
+    queue_sanitize_counter += 1
+    if queue_sanitize_counter % 20 == 0:
+      sanitize_athenad_upload_queue()
 
     success = uploader.step(sm['deviceState'].networkType.raw, sm['deviceState'].networkMetered)
     if success is None:

@@ -8,7 +8,8 @@ from pathlib import Path
 from openpilot.system.hardware.hw import Paths
 
 from openpilot.common.swaglog import cloudlog
-from openpilot.system.loggerd.uploader import Uploader, main, UPLOAD_ATTR_NAME, UPLOAD_ATTR_VALUE, _decompress_zst_bytes
+from openpilot.system.loggerd.uploader import Uploader, main, UPLOAD_ATTR_NAME, UPLOAD_ATTR_VALUE
+from openpilot.system.loggerd.route_upload import _decompress_zst_bytes, get_route_stats
 
 from openpilot.system.loggerd.tests.loggerd_tests_common import UploaderTestCase
 
@@ -189,8 +190,7 @@ class TestUploader(UploaderTestCase):
     route_base = seg_dir.rpartition("--")[0]
     self.make_file_with_data(seg_dir, "qlog.zst", size_mb=0.01)
 
-    uploader = Uploader(self.params.get("DongleId"), str(Paths.log_root()))
-    assert uploader._get_route_stats(route_base) is not None
+    assert get_route_stats(str(Paths.log_root()), route_base) is not None
 
   def test_decompress_streaming_zst(self):
     import zstandard as zstd
