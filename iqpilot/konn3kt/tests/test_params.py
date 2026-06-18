@@ -5,6 +5,7 @@ from openpilot.iqpilot.konn3kt.common.params import (
   get_longitudinal_control_mode_index,
   param_from_base64,
   param_to_bytes,
+  sync_longitudinal_control_mode,
 )
 
 
@@ -42,3 +43,22 @@ def test_param_from_base64_longitudinal_control_mode():
   assert params.get_bool("AlphaLongitudinalEnabled")
   assert params.get_bool("ExperimentalMode")
   assert not params.get_bool("IQDynamicMode")
+
+
+def test_sync_longitudinal_control_mode_repairs_stale_file():
+  params = Params()
+  params.put_bool("AlphaLongitudinalEnabled", True)
+  params.put_bool("ExperimentalMode", False)
+  params.put_bool("IQDynamicMode", False)
+  params.put("LongitudinalControlMode", 3)
+  assert sync_longitudinal_control_mode(params) == 1
+  assert int(params.get("LongitudinalControlMode")) == 1
+  assert param_to_bytes("LongitudinalControlMode", params) == b"1"
+
+
+def test_param_from_base64_alpha_syncs_longitudinal_mode():
+  params = Params()
+  params.put_bool("AlphaLongitudinalEnabled", False)
+  param_from_base64("AlphaLongitudinalEnabled", "MQ==")  # base64("1")
+  assert get_longitudinal_control_mode_index(params) == 1
+  assert int(params.get("LongitudinalControlMode")) == 1

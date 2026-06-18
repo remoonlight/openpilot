@@ -7,6 +7,7 @@ from openpilot.selfdrive.ui.mici.widgets.button import NeonBigParamToggle, NeonB
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.widgets import NavWidget
 from openpilot.selfdrive.ui.layouts.settings.common import restart_needed_callback
+from openpilot.iqpilot.konn3kt.common.params import apply_longitudinal_control_mode, bump_params_version
 from openpilot.selfdrive.ui.ui_state import ui_state
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
@@ -133,7 +134,14 @@ class TogglesLayoutMici(NavWidget):
 
     previous_alpha = ui_state.params.get_bool("AlphaLongitudinalEnabled")
     previous_toyota_stock_long = ui_state.params.get_bool("ToyotaEnforceStockLongitudinal")
-    self._apply_longitudinal_control_selection(value)
+    mode_index = {
+      STOCK_ACC_OPTION: 0,
+      IQ_STANDARD_OPTION: 1,
+      IQ_DYNAMIC_OPTION: 2,
+      IQ_PILOT_OPTION: 3,
+    }[value]
+    apply_longitudinal_control_mode(mode_index, ui_state.params)
+    bump_params_version(ui_state.params)
     if previous_alpha != ui_state.params.get_bool("AlphaLongitudinalEnabled"):
       restart_needed_callback(ui_state.params.get_bool("AlphaLongitudinalEnabled"))
       ui_state.params.put_bool("OnroadCycleRequested", True)
@@ -143,6 +151,7 @@ class TogglesLayoutMici(NavWidget):
 
   def _on_personality_selection(self, value: str):
     ui_state.params.put("LongitudinalPersonality", PERSONALITY_OPTION_TO_PARAM[value])
+    bump_params_version(ui_state.params)
 
   def _get_longitudinal_control_option(self) -> str:
     if not ui_state.params.get_bool("AlphaLongitudinalEnabled"):
@@ -150,30 +159,6 @@ class TogglesLayoutMici(NavWidget):
     if not ui_state.params.get_bool("ExperimentalMode"):
       return IQ_STANDARD_OPTION
     return IQ_DYNAMIC_OPTION if ui_state.params.get_bool("IQDynamicMode") else IQ_PILOT_OPTION
-
-  def _apply_longitudinal_control_selection(self, value: str) -> None:
-    previous_toyota_stock_long = ui_state.params.get_bool("ToyotaEnforceStockLongitudinal")
-
-    if value == IQ_PILOT_OPTION:
-      ui_state.params.put_bool("AlphaLongitudinalEnabled", True)
-      ui_state.params.put_bool("ExperimentalMode", True)
-      ui_state.params.put_bool("IQDynamicMode", False)
-    elif value == IQ_DYNAMIC_OPTION:
-      ui_state.params.put_bool("AlphaLongitudinalEnabled", True)
-      ui_state.params.put_bool("ExperimentalMode", True)
-      ui_state.params.put_bool("IQDynamicMode", True)
-    elif value == IQ_STANDARD_OPTION:
-      ui_state.params.put_bool("AlphaLongitudinalEnabled", True)
-      ui_state.params.put_bool("ExperimentalMode", False)
-      ui_state.params.put_bool("IQDynamicMode", False)
-      ui_state.params.put("LongitudinalPersonality", PERSONALITY_TO_INT["relaxed"])
-    else:
-      ui_state.params.put_bool("AlphaLongitudinalEnabled", False)
-      ui_state.params.put_bool("ExperimentalMode", False)
-      ui_state.params.put_bool("IQDynamicMode", False)
-
-    if value != STOCK_ACC_OPTION and previous_toyota_stock_long:
-      ui_state.params.put_bool("ToyotaEnforceStockLongitudinal", False)
 
   def _render(self, rect: rl.Rectangle):
     self._scroller.render(rect)

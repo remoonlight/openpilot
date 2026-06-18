@@ -10,6 +10,11 @@ from openpilot.common.params import Params, ParamKeyType
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 LONGITUDINAL_CONTROL_MODE_KEY = "LongitudinalControlMode"
+LONGITUDINAL_BACKING_KEYS = frozenset({
+  "AlphaLongitudinalEnabled",
+  "ExperimentalMode",
+  "IQDynamicMode",
+})
 
 
 def get_longitudinal_control_mode_index(params=None) -> int:
@@ -55,7 +60,17 @@ def apply_longitudinal_control_mode(index: int, params=None) -> None:
   ):
     params.put_bool("OnroadCycleRequested", True)
 
-  params.put(LONGITUDINAL_CONTROL_MODE_KEY, index)
+  sync_longitudinal_control_mode(params)
+
+
+def sync_longitudinal_control_mode(params=None) -> int:
+  """Keep LongitudinalControlMode on disk aligned with backing bool params (Konn3kt wire format)."""
+  params = params or Params()
+  index = get_longitudinal_control_mode_index(params)
+  stored = params.get(LONGITUDINAL_CONTROL_MODE_KEY)
+  if stored is None or int(stored) != index:
+    params.put(LONGITUDINAL_CONTROL_MODE_KEY, index)
+  return index
 
 
 def param_to_bytes(param_name: str, params=None, get_default=False) -> bytes | None:
@@ -63,7 +78,7 @@ def param_to_bytes(param_name: str, params=None, get_default=False) -> bytes | N
     params = params or Params()
     if get_default:
       return b"0"
-    return str(get_longitudinal_control_mode_index(params)).encode('utf-8')
+    return str(sync_longitudinal_control_mode(params)).encode('utf-8')
 
   params = params or Params()
   param = params.get(param_name) if not get_default else params.get_default_value(param_name)
@@ -114,6 +129,8 @@ def param_from_base64(param_name: str, base64_data: str, is_compressed=False) ->
   param_type = params.get_type(param_name)
   param_value = _decode_param_value(value, param_type)
   params.put(param_name, param_value)
+  if param_name in LONGITUDINAL_BACKING_KEYS:
+    sync_longitudinal_control_mode(params)
   bump_params_version(params)
 
 
@@ -132,6 +149,8 @@ def save_params_from_base64(params_to_update: dict[str, str], compression: bool 
     param_type = params.get_type(key)
     param_value = _decode_param_value(raw, param_type)
     params.put(key, param_value)
+    if key in LONGITUDINAL_BACKING_KEYS:
+      sync_longitudinal_control_mode(params)
 
   bump_params_version(params)
 
