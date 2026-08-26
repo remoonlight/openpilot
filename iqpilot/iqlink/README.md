@@ -10,15 +10,15 @@ You need a compatible comma device, the correct harness, Wi-Fi, and a phone with
 
 ### Installation
 1. Restore stock openpilot at [flash.comma.ai](https://flash.comma.ai).
-2. Finish stock setup, connect Wi-Fi, and enter `https://installer.iqlvbs.com/beta` as the custom software URL (IQ.Pilot 1.0c on IQ.OS 4.9.7, branch `beta`).
+2. Finish stock setup, connect Wi-Fi, and enter `https://installer.iqlvbs.com/release-candidate-4` as the custom software URL.
 3. Wait for download and reboot. The home screen date and time should look normal.
 4. If the ~1 GB download fails, retry Wi-Fi once, then use the [Gigafile package](https://105.gigafile.nu/1022-i1e58aa3443a357555c7f25a9f6a0e737) (`IQ.OS-4.9.7.zip`, SHA256 `4c068f424ebf1ed761c305a259eb47e9a1355b394a9b77106e6c17d6e9a68612`). Ask in Discord before manual flashing.
-5. With `beta` running, enable ADB or SSH in Developer settings only when Cursor will deploy the overlay.
+5. With `release-candidate-4` running, enable ADB or SSH in Developer settings only when Cursor will deploy the overlay.
 6. From this repository root:
 
    `python iqpilot/iqlink/tools/deploy_iqlink_overlay.py iq@DEVICE_IP`
 
-   The tool requires Git root `/data/iqpilot` and branch `beta`. It backs up touched files under `/data/iqlink-overlay-backup-*`.
+   The tool requires Git root `/data/iqpilot` and branch `release-candidate-4`. It backs up touched files under `/data/iqlink-overlay-backup-*`.
 7. Apply only needed keys from [`comma_settings_public.json`](./comma_settings_public.json), reboot if needed, then pair IQ-link from the **Bluetooth** tile.
 
 ### Pair your phone
@@ -53,15 +53,15 @@ IQ-link 用低功耗蓝牙把 comma 与手机上的 IQ-link 程序连起来。�
 
 ### 安装步骤
 1. 打开 [flash.comma.ai](https://flash.comma.ai)，恢复原厂 openpilot。
-2. 完成原厂设置、连上 Wi-Fi，在“自定义软件地址”填写 `https://installer.iqlvbs.com/beta`（IQ.Pilot 1.0c，IQ.OS 4.9.7，分支 `beta`）。
+2. 完成原厂设置、连上 Wi-Fi，在“自定义软件地址”填写 `https://installer.iqlvbs.com/release-candidate-4`。
 3. 等待下载和重启完成，首页日期与时间应显示正常。
 4. 若约 1 GB 文件下载失败，先重试 Wi-Fi；仍失败可使用 [Gigafile 文件](https://105.gigafile.nu/1022-i1e58aa3443a357555c7f25a9f6a0e737)（`IQ.OS-4.9.7.zip`，SHA256 `4c068f424ebf1ed761c305a259eb47e9a1355b394a9b77106e6c17d6e9a68612`）。手动刷机前请先到 Discord 求助。
-5. 确认已是 `beta` 后，仅在 Cursor 辅助部署时开启 ADB 或 SSH。
+5. 确认已是 `release-candidate-4` 后，仅在 Cursor 辅助部署时开启 ADB 或 SSH。
 6. 在本仓库根目录执行：
 
    `python iqpilot/iqlink/tools/deploy_iqlink_overlay.py iq@设备IP`
 
-   工具要求 Git 根目录为 `/data/iqpilot`、分支为 `beta`，并会把改动文件备份到 `/data/iqlink-overlay-backup-*`。
+   工具要求 Git 根目录为 `/data/iqpilot`、分支为 `release-candidate-4`，并会把改动文件备份到 `/data/iqlink-overlay-backup-*`。
 7. 按需写入 [`comma_settings_public.json`](./comma_settings_public.json) 中的设置，必要时重启，再从 **蓝牙** 卡片配对 IQ-link。
 
 ### 连接手机
