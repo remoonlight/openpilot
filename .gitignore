@@ -153,6 +153,7 @@ iqpilot/selfdrive/iqlocd/models/generated/
 osmaps_build/
 
 # --- local scratch/debug + large model artifacts (never commit) ---
+/tools/debug/
 /infinite_driver/
 /konn3kt_private/
 /.mull/
