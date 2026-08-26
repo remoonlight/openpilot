@@ -15,10 +15,19 @@ from iqpilot.common.params import Params, UnknownKeyName
 from iqpilot.selfdrive.ui.lib.iqlink_status import iqlink_hmac_up, iqlink_status_color
 from iqpilot.selfdrive.ui.mici.widgets.stock_button import BigButton
 from iqpilot.system.ui.lib.application import gui_app, MousePos
-from iqpilot.system.ui.lib.multilang import tr as mici_tr
+from iqpilot.system.ui.lib.multilang import multilang, tr as mici_tr
 
 def mici_register_button(_button):
   pass
+
+
+def iqlink_tile_label() -> str:
+  """Settings tile is Bluetooth; zh catalog may not include the iqlink msgid."""
+  text = mici_tr("Bluetooth")
+  lang = str(getattr(multilang, "language", "") or "")
+  if lang.startswith("zh") and text == "Bluetooth":
+    return "蓝牙"
+  return text
 
 
 class IqlinkBigButton(BigButton):
@@ -26,7 +35,7 @@ class IqlinkBigButton(BigButton):
 
   def __init__(self):
     super().__init__(
-      mici_tr("iqlink"),
+      iqlink_tile_label(),
       "",
       gui_app.texture("icons/iq/bluetooth.png", 56, 56, keep_aspect_ratio=True),
     )
@@ -38,7 +47,7 @@ class IqlinkBigButton(BigButton):
     return 52 if any("\u4e00" <= c <= "\u9fff" for c in self.text) else 64
 
   def refresh_label(self):
-    label = mici_tr("iqlink")
+    label = iqlink_tile_label()
     if self.text != label:
       self.set_text(label)
     self._label.set_font_size(self._get_label_font_size())
