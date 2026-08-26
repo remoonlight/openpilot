@@ -179,6 +179,8 @@ iqpilot/selfdrive/ui/tests/test_ui/nav_demo_report/
 **/__pycache__/
 *.pyc
 *.mlpackage/
+.cursor/
+docs/
 
 
 # fetcher: closed-source precompiled component — ship only the obfuscated .so
