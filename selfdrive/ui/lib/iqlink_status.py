@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pyray as rl
 
-from openpilot.common.params import UnknownKeyName
+from iqpilot.common.params import UnknownKeyName
 
 LINK_CONNECTED = 2
 

@@ -11,8 +11,8 @@ import sys
 
 
 def offline() -> int:
-  from openpilot.iqpilot.iqlink.protocol import map_carrot_to_nav_fields
-  from openpilot.iqpilot.iqlink.ble_gatt import (
+  from iqpilot.iqlink.protocol import map_carrot_to_nav_fields
+  from iqpilot.iqlink.ble_gatt import (
     ADV_WINDOW_S,
     LINK_CONNECTED,
     LINK_CONNECTING,
@@ -35,7 +35,7 @@ def offline() -> int:
 
 
 def device() -> int:
-  from openpilot.common.params import Params
+  from iqpilot.common.params import Params
 
   p = Params()
   print(f"IqlinkEnabled={p.get_bool('IqlinkEnabled')}")

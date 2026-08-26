@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from openpilot.iqpilot.iqlink.bridge import IqlinkBridge
+from iqpilot.iqlink.bridge import IqlinkBridge
 
 
 def _bridge() -> IqlinkBridge:

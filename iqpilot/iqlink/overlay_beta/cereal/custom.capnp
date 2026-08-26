@@ -595,7 +595,7 @@ struct IQNavState @0xaae9afb364368cd9 {
   cameraChime @59 :Bool;
   cameraTrusted @60 :Bool;
   cameraSourceAge @61 :Float32;
-  trafficLight @62 :Text;                             # Gaode light: none/red/yellow/green (iqlink; beta @49+ is traffic metadata)
+  trafficLight @62 :Text;                             # Gaode light: none/red/yellow/green (iqlink)
   trafficLightRemainS @63 :Int32;                     # Countdown seconds; -1 if APK omitted RemainS
 
   enum CameraType {

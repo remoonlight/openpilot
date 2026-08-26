@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 
-from openpilot.iqpilot.iqlink.bridge import IqlinkBridge, clear_stale_nav_params
+from iqpilot.iqlink.bridge import IqlinkBridge, clear_stale_nav_params
 
 
 class FakeParams:

@@ -3,7 +3,7 @@
 Run: pytest iqpilot/iqlink/tests/test_protocol.py
 """
 
-from openpilot.iqpilot.iqlink.protocol import map_carrot_to_nav_fields
+from iqpilot.iqlink.protocol import map_carrot_to_nav_fields
 
 
 def test_basic_speed_and_turn():

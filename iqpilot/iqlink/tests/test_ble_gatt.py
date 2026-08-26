@@ -5,7 +5,7 @@ Run: pytest iqpilot/iqlink/tests/test_ble_gatt.py
 
 import pytest
 
-from openpilot.iqpilot.iqlink.ble_gatt import (
+from iqpilot.iqlink.ble_gatt import (
   BleAuthError,
   SeqTracker,
   compute_hmac_hex,
@@ -72,7 +72,7 @@ def test_extract_nav_payload():
 
 
 def test_any_device_connected():
-  from openpilot.iqpilot.iqlink.ble_gatt import DEVICE_IFACE, any_device_connected
+  from iqpilot.iqlink.ble_gatt import DEVICE_IFACE, any_device_connected
 
   adapter = "/org/bluez/hci0"
   empty = {}
@@ -90,7 +90,7 @@ def test_any_device_connected():
 
 
 def test_set_ble_link_state_writes_params():
-  from openpilot.iqpilot.iqlink.ble_gatt import (
+  from iqpilot.iqlink.ble_gatt import (
     ADV_WINDOW_S,
     BLE_CONNECTED_PARAM,
     BLE_LINK_STATE_PARAM,
@@ -124,7 +124,7 @@ def test_set_ble_link_state_writes_params():
 
 def test_discover_window_vs_advertising_policy():
   """ADV_WINDOW_S gates PSK/discovering UI only; ADV off only when SoftBus+HMAC both up."""
-  from openpilot.iqpilot.iqlink.ble_gatt import ADV_WINDOW_S, LINK_CONNECTED, LINK_OFF, ble_should_advertise
+  from iqpilot.iqlink.ble_gatt import ADV_WINDOW_S, LINK_CONNECTED, LINK_OFF, ble_should_advertise
 
   assert ADV_WINDOW_S == 120.0
 
@@ -136,7 +136,7 @@ def test_discover_window_vs_advertising_policy():
 
 
 def test_next_adv_retry_delay():
-  from openpilot.iqpilot.iqlink.ble_gatt import ADV_RETRY_BACKOFF_S, next_adv_retry_delay
+  from iqpilot.iqlink.ble_gatt import ADV_RETRY_BACKOFF_S, next_adv_retry_delay
 
   assert next_adv_retry_delay(0) == 0.0
   assert next_adv_retry_delay(1) == ADV_RETRY_BACKOFF_S[0]
@@ -150,7 +150,7 @@ def test_peer_is_zombie():
   """Pure helper for SoftBus-up / no-WriteValue zombie drop (run_ble_gatt_loop)."""
   # Callers: ble_gatt.IqlinkBleGatt.maybe_drop_zombie_peers → peer_is_zombie
   # Existing file: iqpilot/iqlink/tests/test_ble_gatt.py (edit, not new)
-  from openpilot.iqpilot.iqlink.ble_gatt import LINK_CONNECTED, LINK_OFF, peer_is_zombie
+  from iqpilot.iqlink.ble_gatt import LINK_CONNECTED, LINK_OFF, peer_is_zombie
 
   assert peer_is_zombie(
     link_state=LINK_CONNECTED, peer_connected_mono=1.0, last_nav_rx_mono=0.0, now_mono=100.0,
@@ -218,7 +218,7 @@ def test_peer_is_zombie():
 
 def test_stale_hmac_allows_advertise_after_demote():
   """SoftBus-down ADV without demote; long stale still demotes."""
-  from openpilot.iqpilot.iqlink.ble_gatt import LINK_CONNECTED, LINK_OFF, ble_should_advertise, peer_is_zombie
+  from iqpilot.iqlink.ble_gatt import LINK_CONNECTED, LINK_OFF, ble_should_advertise, peer_is_zombie
 
   # SoftBus down + link=2 short window: ADV on, no demote.
   assert peer_is_zombie(
@@ -243,7 +243,7 @@ def test_stale_hmac_allows_advertise_after_demote():
 
 
 def test_hmac_connect_is_fresh():
-  from openpilot.iqpilot.iqlink.ble_gatt import hmac_connect_is_fresh
+  from iqpilot.iqlink.ble_gatt import hmac_connect_is_fresh
 
   assert hmac_connect_is_fresh(link_connected_mono=0.0, now_mono=100.0) is False
   assert hmac_connect_is_fresh(link_connected_mono=90.0, now_mono=100.0, grace_s=60.0) is True
@@ -252,7 +252,7 @@ def test_hmac_connect_is_fresh():
 
 def test_softbus_down_should_clear_link():
   """SoftBus flap must not clear HMAC LinkState while WriteValue is fresh."""
-  from openpilot.iqpilot.iqlink.ble_gatt import (
+  from iqpilot.iqlink.ble_gatt import (
     LINK_CONNECTED,
     LINK_CONNECTING,
     LINK_OFF,
@@ -282,7 +282,7 @@ def test_softbus_down_should_clear_link():
 
 
 def test_connected_device_paths():
-  from openpilot.iqpilot.iqlink.ble_gatt import DEVICE_IFACE, connected_device_paths
+  from iqpilot.iqlink.ble_gatt import DEVICE_IFACE, connected_device_paths
 
   adapter = "/org/bluez/hci0"
   managed = {
@@ -296,7 +296,7 @@ def test_connected_device_paths():
 
 def test_connecting_is_stale():
   """F4: LinkState stuck in connecting without HMAC → recover."""
-  from openpilot.iqpilot.iqlink.ble_gatt import CONNECTING_TIMEOUT_S, LINK_CONNECTING, LINK_OFF, connecting_is_stale
+  from iqpilot.iqlink.ble_gatt import CONNECTING_TIMEOUT_S, LINK_CONNECTING, LINK_OFF, connecting_is_stale
 
   assert connecting_is_stale(
     link_state=LINK_OFF, connecting_since_mono=1.0, now_mono=100.0,
@@ -314,7 +314,7 @@ def test_connecting_is_stale():
 
 def test_latest_envelope_slot_coalesce():
   """Rapid puts keep only the last env; take clears (nav = latest-only)."""
-  from openpilot.iqpilot.iqlink.ble_gatt import LatestEnvelopeSlot
+  from iqpilot.iqlink.ble_gatt import LatestEnvelopeSlot
 
   slot = LatestEnvelopeSlot()
   assert slot.take() is None
