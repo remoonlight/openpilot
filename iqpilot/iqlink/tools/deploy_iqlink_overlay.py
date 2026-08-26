@@ -35,6 +35,8 @@ FILES = (
   ("iqpilot/iqlink/overlay_beta/cereal/custom.capnp", "iqpilot/cereal/custom.capnp"),
   ("iqpilot/iqlink/overlay_beta/selfdrive/controls/lib/iq_longitudinal_planner.py",
    "iqpilot/selfdrive/controls/lib/iq_longitudinal_planner.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/controls/lib/longitudinal_planner.py",
+   "iqpilot/selfdrive/controls/lib/longitudinal_planner.py"),
   ("iqpilot/iqlink/overlay_beta/selfdrive/controls/lib/speed_limit_controller.py",
    "iqpilot/selfdrive/controls/lib/speed_limit_controller.py"),
   ("iqpilot/iqlink/overlay_beta/ui/onroad/display_speed_limit.py", "iqpilot/ui/onroad/display_speed_limit.py"),
