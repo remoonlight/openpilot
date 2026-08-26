@@ -35,9 +35,16 @@ You need a compatible comma device, the correct harness, Wi-Fi, and a phone with
 | No green Bluetooth light | Toggle **Bluetooth** off and on, then pair again. |
 
 ### Settings and overlay tool
-[`comma_settings_public.json`](./comma_settings_public.json) is a redacted **VW ID.3 2024–25 / IQ-link** example, not a universal dump. Apply helpers: [`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py), [`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py).
+[`comma_settings_public.json`](./comma_settings_public.json) is the **recommended snapshot from this comma** (redacted VW ID.3 2024–25 / IQ-link), not a dump for every car. Same platform: apply the file after overlay. Other cars: copy only the keys you intend to change. Helpers: [`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py), [`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py). Reboot after writing.
 
-On the device after copying the JSON and apply script:
+From the repository root:
+
+```powershell
+scp iqpilot/iqlink/comma_settings_public.json iqpilot/iqlink/tools/apply_comma_settings_public.py iq@DEVICE_IP:/tmp/
+ssh iq@DEVICE_IP "python3 /tmp/apply_comma_settings_public.py /tmp/comma_settings_public.json"
+```
+
+On the device if the files are already in `/tmp/`:
 
 ```sh
 python3 /tmp/apply_comma_settings_public.py /tmp/comma_settings_public.json
@@ -78,9 +85,16 @@ IQ-link 用低功耗蓝牙把 comma 与手机上的 IQ-link 程序连起来。�
 | 蓝牙无绿灯 | 关闭再开启 **蓝牙** 卡片，重新配对手机。 |
 
 ### 设置与部署工具
-[`comma_settings_public.json`](./comma_settings_public.json) 是 **大众 ID.3 2024–25 / IQ-link** 脱敏示例，不能整份套用到其他车辆。写入脚本：[`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py)、[`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py)。
+[`comma_settings_public.json`](./comma_settings_public.json) 是这台 comma 上脱敏后的**建议配置**（大众 ID.3 2024–25 / IQ-link），不是所有车的通用备份。同平台 overlay 后建议整份套用；其他车只写入你要改的键。脚本：[`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py)、[`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py)。写完重启一次。
 
-将车机上的 JSON 与脚本放到 `/tmp/` 后执行：
+在本仓库根目录：
+
+```powershell
+scp iqpilot/iqlink/comma_settings_public.json iqpilot/iqlink/tools/apply_comma_settings_public.py iq@设备IP:/tmp/
+ssh iq@设备IP "python3 /tmp/apply_comma_settings_public.py /tmp/comma_settings_public.json"
+```
+
+文件已在车机 `/tmp/` 时：
 
 ```sh
 python3 /tmp/apply_comma_settings_public.py /tmp/comma_settings_public.json
