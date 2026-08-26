@@ -53,6 +53,12 @@ def test_meb_tsk_hard_brake_overlay():
   assert faulted is True
 
 
+def test_settings_includes_iqlink_bluetooth_tile():
+  src = (ROOT / "selfdrive/ui/mici/layouts/settings/settings.py").read_text(encoding="utf-8")
+  assert "from iqpilot.selfdrive.ui.mici.layouts.settings.iqlink import IqlinkBigButton" in src
+  assert "IqlinkBigButton()" in src
+
+
 def test_nav_exec_floor():
   kph_to_ms = 1 / 3.6
   floor = 60.0 * kph_to_ms
@@ -65,5 +71,6 @@ def test_nav_exec_floor():
 if __name__ == "__main__":
   test_min_display_speed_limit()
   test_meb_tsk_hard_brake_overlay()
+  test_settings_includes_iqlink_bluetooth_tile()
   test_nav_exec_floor()
   print("ok")

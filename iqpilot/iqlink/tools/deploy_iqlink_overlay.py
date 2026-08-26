@@ -54,6 +54,8 @@ FILES = (
    "artifacts/package_sources/iqdbc/iqdbc/car/volkswagen/mebcan.py"),
   ("selfdrive/ui/lib/iqlink_status.py", "iqpilot/selfdrive/ui/lib/iqlink_status.py"),
   ("selfdrive/ui/mici/layouts/settings/iqlink.py", "iqpilot/selfdrive/ui/mici/layouts/settings/iqlink.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/ui/mici/layouts/settings/settings.py",
+   "iqpilot/selfdrive/ui/mici/layouts/settings/settings.py"),
   ("selfdrive/assets/icons/iq/bluetooth.png", "iqpilot/selfdrive/assets/icons/iq/bluetooth.png"),
   ("selfdrive/assets/icons/iq/bluetooth.png", "iqpilot/selfdrive/assets/icons_mici/iq/bluetooth.png"),
 )
