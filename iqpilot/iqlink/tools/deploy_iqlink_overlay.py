@@ -20,10 +20,38 @@ DEVICE_ROOT = "/data/iqpilot"
 FILES = (
   ("iqpilot/iqlink", "iqpilot/iqlink"),
   ("iqpilot/iqlink/overlay_beta/system/manager/process_config.py", "iqpilot/system/manager/process_config.py"),
+  ("iqpilot/iqlink/overlay_beta/system/manager/helpers.py", "iqpilot/system/manager/helpers.py"),
+  ("iqpilot/iqlink/overlay_beta/system/manager/manager.py", "iqpilot/system/manager/manager.py"),
+  ("iqpilot/iqlink/overlay_beta/system/ui/lib/application.py", "iqpilot/system/ui/lib/application.py"),
+  ("iqpilot/iqlink/overlay_beta/system/ui/lib/text_measure.py", "iqpilot/system/ui/lib/text_measure.py"),
+  ("iqpilot/iqlink/overlay_beta/system/ui/lib/wrap_text.py", "iqpilot/system/ui/lib/wrap_text.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/ui/mici/widgets/dialog.py",
+   "iqpilot/selfdrive/ui/mici/widgets/dialog.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/assets/fonts/NotoSansSC-Regular.fnt",
+   "iqpilot/selfdrive/assets/fonts/NotoSansSC-Regular.fnt"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/assets/fonts/NotoSansSC-Regular.png",
+   "iqpilot/selfdrive/assets/fonts/NotoSansSC-Regular.png"),
   ("iqpilot/iqlink/overlay_beta/common/params_keys.h", "iqpilot/common/params_keys.h"),
   ("iqpilot/iqlink/overlay_beta/cereal/custom.capnp", "iqpilot/cereal/custom.capnp"),
   ("iqpilot/iqlink/overlay_beta/selfdrive/controls/lib/iq_longitudinal_planner.py",
    "iqpilot/selfdrive/controls/lib/iq_longitudinal_planner.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/controls/lib/speed_limit_controller.py",
+   "iqpilot/selfdrive/controls/lib/speed_limit_controller.py"),
+  ("iqpilot/iqlink/overlay_beta/ui/onroad/display_speed_limit.py", "iqpilot/ui/onroad/display_speed_limit.py"),
+  ("iqpilot/iqlink/overlay_beta/ui/mici/onroad/hud_renderer.py", "iqpilot/ui/mici/onroad/hud_renderer.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/ui/layouts/home.py", "iqpilot/selfdrive/ui/layouts/home.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/ui/mici/layouts/home.py", "iqpilot/selfdrive/ui/mici/layouts/home.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/ui/layouts/sidebar.py", "iqpilot/selfdrive/ui/layouts/sidebar.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/ui/mici/onroad/augmented_road_view.py",
+   "iqpilot/selfdrive/ui/mici/onroad/augmented_road_view.py"),
+  ("iqpilot/iqlink/overlay_beta/selfdrive/ui/onroad/augmented_road_view.py",
+   "iqpilot/selfdrive/ui/onroad/augmented_road_view.py"),
+  ("iqpilot/iqlink/overlay_beta/artifacts/package_sources/iqdbc/iqdbc/car/volkswagen/carstate.py",
+   "artifacts/package_sources/iqdbc/iqdbc/car/volkswagen/carstate.py"),
+  ("iqpilot/iqlink/overlay_beta/artifacts/package_sources/iqdbc/iqdbc/car/volkswagen/carcontroller.py",
+   "artifacts/package_sources/iqdbc/iqdbc/car/volkswagen/carcontroller.py"),
+  ("iqpilot/iqlink/overlay_beta/artifacts/package_sources/iqdbc/iqdbc/car/volkswagen/mebcan.py",
+   "artifacts/package_sources/iqdbc/iqdbc/car/volkswagen/mebcan.py"),
   ("selfdrive/ui/lib/iqlink_status.py", "iqpilot/selfdrive/ui/lib/iqlink_status.py"),
   ("selfdrive/ui/mici/layouts/settings/iqlink.py", "iqpilot/selfdrive/ui/mici/layouts/settings/iqlink.py"),
   ("selfdrive/assets/icons/iq/bluetooth.png", "iqpilot/selfdrive/assets/icons/iq/bluetooth.png"),
@@ -55,9 +83,9 @@ def package(output: Path) -> list[str]:
 
 REMOTE_APPLY = r"""set -eu
 root=/data/iqpilot
-package=/tmp/iqlink-overlay.tgz
+package=/data/iqlink-overlay.tgz
 [ "$(git -C "$root" branch --show-current)" = beta ] || { echo "expected beta at $root" >&2; exit 1; }
-[ -f "$root/iqpilot/system/manager/process_config.py" ] || { echo "not an IQ.Pilot release-candidate root: $root" >&2; exit 1; }
+[ -f "$root/iqpilot/system/manager/process_config.py" ] || { echo "not an IQ.Pilot beta root: $root" >&2; exit 1; }
 stage="$(mktemp -d)"
 backup="/data/iqlink-overlay-backup-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$backup"
@@ -103,8 +131,9 @@ def main() -> int:
       return 0
     if not args.host:
       raise SystemExit("host is required unless --dry-run")
-    subprocess.run(["scp", str(package_path), f"{args.host}:/tmp/iqlink-overlay.tgz"], check=True)
-    subprocess.run(["ssh", args.host, "sh -s"], input=REMOTE_APPLY, text=True, check=True)
+    subprocess.run(["scp", str(package_path), f"{args.host}:/data/iqlink-overlay.tgz"], check=True)
+    script = REMOTE_APPLY.replace("\r\n", "\n").encode("utf-8")
+    subprocess.run(["ssh", args.host, "sh -s"], input=script, check=True)
   return 0
 
 

@@ -3,7 +3,7 @@
 Params: IqlinkEnabled, IqlinkBleLinkState, IqlinkBleConnected,
 IqlinkBlePeerConnected, IqlinkBlePairFailed.
 
-Lamp: see openpilot.selfdrive.ui.lib.iqlink_status
+Lamp: see iqpilot.selfdrive.ui.lib.iqlink_status
 PSK is fixed and not shown on the primary tile.
 """
 
@@ -11,17 +11,14 @@ from __future__ import annotations
 
 import pyray as rl
 
-from openpilot.common.params import Params, UnknownKeyName
-from openpilot.selfdrive.ui.lib.iqlink_status import iqlink_hmac_up, iqlink_status_color
-from openpilot.selfdrive.ui.mici.widgets.stock_button import BigButton
-from openpilot.system.ui.lib.application import gui_app, MousePos
+from iqpilot.common.params import Params, UnknownKeyName
+from iqpilot.selfdrive.ui.lib.iqlink_status import iqlink_hmac_up, iqlink_status_color
+from iqpilot.selfdrive.ui.mici.widgets.stock_button import BigButton
+from iqpilot.system.ui.lib.application import gui_app, MousePos
+from iqpilot.system.ui.lib.multilang import tr as mici_tr
 
-try:
-  from openpilot.selfdrive.ui.mici.mici_i18n import mici_tr, mici_register_button
-except ImportError:
-  from openpilot.system.ui.lib.multilang import tr as mici_tr
-  def mici_register_button(_button):
-    pass
+def mici_register_button(_button):
+  pass
 
 
 class IqlinkBigButton(BigButton):

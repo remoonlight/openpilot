@@ -16,16 +16,16 @@ import threading
 import time
 from typing import Any
 
-from cereal import custom, messaging
-from openpilot.common.params import Params
-from openpilot.common.realtime import Ratekeeper
-from openpilot.common.swaglog import cloudlog
-from openpilot.iqpilot.iqlink import (
+from iqpilot.cereal import custom, messaging
+from iqpilot.common.params import Params
+from iqpilot.common.realtime import Ratekeeper
+from iqpilot.common.swaglog import cloudlog
+from iqpilot.iqlink import (
   DEFAULT_CANCEL_TIMEOUT_S,
   DEFAULT_WARN_TIMEOUT_S,
   sticky_clock_aligned,
 )
-from openpilot.iqpilot.iqlink import protocol as proto
+from iqpilot.iqlink import protocol as proto
 
 NavState = custom.IQNavState
 NavDir = custom.NavDirection
@@ -458,7 +458,7 @@ def main() -> None:
   params = Params()
   bridge = IqlinkBridge()
   try:
-    from openpilot.iqpilot.iqlink.ble_gatt import ensure_ble_psk, run_ble_gatt_loop
+    from iqpilot.iqlink.ble_gatt import ensure_ble_psk, run_ble_gatt_loop
     if params.get_bool("IqlinkEnabled"):
       ensure_ble_psk(params)
 

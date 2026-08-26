@@ -16,7 +16,7 @@ import threading
 import time
 from typing import Any, Callable
 
-from openpilot.common.params import Params
+from iqpilot.common.params import Params
 
 
 class _LazyCloudlog:
@@ -31,7 +31,7 @@ class _LazyCloudlog:
         import logging
         self._real = logging.getLogger("iqlink")
       else:
-        from openpilot.common.swaglog import cloudlog as real
+        from iqpilot.common.swaglog import cloudlog as real
         self._real = real
     return self._real
 

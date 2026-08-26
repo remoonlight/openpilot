@@ -76,13 +76,18 @@ def iqlink_right_turn_yield(nav_state, *, window_m: float = 150.0) -> bool:
     return False
 
 
-def hold_at_standstill(CS, *, nav_go: bool = False) -> bool:
-  """Once nearly stopped, do not resume until gas or IQlink nav_go."""
-  if nav_go or bool(getattr(CS, "gasPressed", False)):
+def hold_at_standstill(CS, *, nav_go: bool = False, light_stop_active: bool = False,
+                      lead_moving: bool = False, vision_go: bool = False) -> bool:
+  """Hold only for an active single-light stop. ACC/lead resume without APK/BLE."""
+  if not light_stop_active:
+    return False
+  if nav_go or lead_moving or vision_go or bool(getattr(CS, "gasPressed", False)):
     return False
   if bool(getattr(CS, "standstill", False)):
     return True
   return float(getattr(CS, "vEgo", 0.0) or 0.0) <= 0.75
+
+
 class LongitudinalPlannerIQ:
   def __init__(self, CP: structs.CarParams, CP_IQ: structs.IQCarParams, mpc):
     self.events_iq = IQEvents()
@@ -120,8 +125,21 @@ class LongitudinalPlannerIQ:
     experimental_mode = sm['selfdriveState'].experimentalMode
     if not self.iq_dynamic.active():
       return experimental_mode
-
     return experimental_mode and self.iq_dynamic.mode() == "blended"
+
+  def _nav_device_offset_ms(self) -> float:
+    offset = float(getattr(self.slimit, "slc_offset", 0.0) or 0.0)
+    if offset != 0.0:
+      return offset
+    if self._params is None:
+      return 0.0
+    try:
+      raw = self._params.get("IQSpeedAssistValueOffset", return_default=True)
+      value = float(raw) if raw is not None else 0.0
+      is_metric = bool(self._params.get_bool("IsMetric"))
+      return value * (CV.KPH_TO_MS if is_metric else CV.MPH_TO_MS)
+    except Exception:
+      return 0.0
 
   def update_targets(self, sm: messaging.SubMaster, v_ego: float, v_cruise: float) -> float:
     CS = sm['carState']
@@ -179,11 +197,14 @@ class LongitudinalPlannerIQ:
       LongitudinalPlanSource.speedLimitAssist: slc_v_cruise,
     }
     has_follow_lead = False
+    lead_moving = False
     try:
       lead = sm['radarState'].leadOne
       has_follow_lead = bool(getattr(lead, "status", False))
+      lead_moving = has_follow_lead and float(getattr(lead, "vLead", 0.0) or 0.0) > 1.0
     except Exception:
       has_follow_lead = False
+      lead_moving = False
     if has_follow_lead:
       self.nav_stop_request = False
     link_warn = False
@@ -193,25 +214,50 @@ class LongitudinalPlannerIQ:
       except Exception:
         link_warn = False
     block_nav = nav_long_blocked(CS.gearShifter, link_warn=link_warn)
+    nav_stop_live = bool(self.nav_stop_request and not block_nav)
+    vision_stop = False
+    try:
+      vision_stop = bool(self.iq_dynamic.force_stop_requested())
+    except Exception:
+      vision_stop = False
+    light_stop_active = bool(nav_stop_live or vision_stop or self.forcing_stop)
+    vision_go = bool(not vision_stop and not nav_stop_live)
     if self.nav_valid and not has_follow_lead and not block_nav:
       if self.nav_stop_request:
         targets[LongitudinalPlanSource.nav] = 0.0
       else:
-        targets[LongitudinalPlanSource.nav] = max(self.nav_speed_target, 0.0)
-      targets.pop(LongitudinalPlanSource.cruise, None)
+        targets[LongitudinalPlanSource.nav] = max(self.nav_speed_target, 0.0, _NAV_EXEC_MIN_MS) + self._nav_device_offset_ms()
+      # Keep cruise/lead in the set so follow still wins via min() when slower.
+
+    try:
+      pred_on = bool(self._params and self._params.get_bool("EnableSLPredReactToCurves"))
+      pred_v = float(getattr(CS.cruiseState, "speedLimitPredicative", 0.0) or 0.0)
+      if pred_on and pred_v > 0.0 and LongitudinalPlanSource.nav in targets and not self.nav_stop_request:
+        if pred_v < targets[LongitudinalPlanSource.nav]:
+          targets[LongitudinalPlanSource.nav] = pred_v
+    except Exception:
+      pass
 
     self.source = min(targets, key=lambda k: targets[k])
     self.output_v_target = targets[self.source]
     nav_go = iqlink_nav_go(
-      nav_valid=self.nav_valid,
+      nav_valid=self.nav_valid and not block_nav,
       nav_stop_request=self.nav_stop_request,
       nav_speed_target=self.nav_speed_target,
       nav_accel_target=self.nav_accel_target,
       traffic_light=getattr(self, "nav_traffic_light", "none"),
     ) or iqlink_right_turn_yield(nav_state)
-    if hold_at_standstill(CS, nav_go=nav_go):
+    if hold_at_standstill(
+      CS,
+      nav_go=nav_go,
+      light_stop_active=light_stop_active,
+      lead_moving=lead_moving,
+      vision_go=vision_go and light_stop_active,
+    ):
       self.output_v_target = 0.0
-    if self.nav_stop_request and not has_follow_lead and not block_nav:
+      if self.output_a_target > 0.0:
+        self.output_a_target = 0.0
+    if nav_stop_live:
       self.output_v_target = min(self.output_v_target, 0.0)
     self.output_v_target = self._apply_force_stop(self.output_v_target, v_ego, sm, slc_apply_enabled)
     # envelope shaping only in Assist mode: info/warn must never change the plan
