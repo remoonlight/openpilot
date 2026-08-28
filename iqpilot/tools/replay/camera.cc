@@ -70,6 +70,9 @@ void CameraServer::cameraThread(Camera &cam) {
           .timestamp_eof = eidx.getTimestampEof(),
       };
       vipc_server_->send(yuv, &extra);
+      if (++sent_count_ % 100 == 1) {
+        rInfo("camera[%d] vipc send #%lu frame_id=%u seg_frame=%d", cam.type, sent_count_, frame_id, segment_id);
+      }
     } else {
       rError("camera[%d] failed to get frame: %lu", cam.type, segment_id);
     }

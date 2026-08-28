@@ -24,6 +24,7 @@ from iqpilot.selfdrive.controls.lib.latcontrol_torque import LatControlTorque
 from iqpilot.selfdrive.controls.lib.latcontrol_torque_pq import LatControlTorquePQ
 from iqpilot.selfdrive.controls.lib.latcontrol_torque_v0 import LatControlTorqueV0, is_vw_mqb_torque
 from iqpilot.selfdrive.controls.lib.longcontrol import LongControl
+from iqpilot.selfdrive.controls.steering_fault_recovery import SteeringFaultRecovery
 from iqpilot.system.proprietary_runtime._verified_import import import_verified_module
 from iqpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
 
@@ -73,6 +74,7 @@ class Controls(IQControlsLayer):
     self.pm = messaging.PubMaster(['carControl', 'controlsState', 'iqPerfTrace'] + self.iq_pub_services)
 
     self.steer_limited_by_safety = False
+    self.steering_fault_recovery = SteeringFaultRecovery()
     self.curvature = 0.0
     self.desired_curvature = 0.0
     self.roll_compensation = 0.0
@@ -208,7 +210,8 @@ class Controls(IQControlsLayer):
     # Get which state to use for active lateral control
     _lat_active = self.iq_lateral_allowed(self.sm)
 
-    CC.latActive = _lat_active and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
+    steering_fault_recovered = self.steering_fault_recovery.update(CS.steerFaultTemporary, CS.steerFaultPermanent)
+    CC.latActive = _lat_active and steering_fault_recovered and \
                    (not standstill or self.CP.steerAtStandstill)
     # long control may stay active through a gas override on platforms that opt in
     override_longitudinal = any(e.overrideLongitudinal for e in self.sm['onroadEvents'])

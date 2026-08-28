@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import fcntl
 import os
+import subprocess
+import sys
 import queue
 import struct
 import threading
@@ -16,10 +18,14 @@ from iqpilot.cereal.services import SERVICE_LIST
 from iqpilot.common.iq_perf import PerfSample, PerfTraceEmitter
 from iqpilot.common.utils import strip_deprecated_keys
 from iqpilot.common.filter_simple import FirstOrderFilter
+from iqpilot.common.basedir import BASEDIR
 from iqpilot.common.params import Params
 from iqpilot.common.realtime import DT_HW
 from iqpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
 from iqpilot.system.hardware import HARDWARE, TICI, AGNOS
+from iqpilot.system.hardware.egpu_dock.flash import dock_needs_flash
+from iqpilot.system.hardware.egpu_dock.status import EgpuDockStatus
+from iqpilot.system.hardware.usb import get_link_error_count, get_usb_state, set_usb_state, usb3_lane
 from iqpilot.system.loggerd.config import get_available_percent
 from iqpilot.common.swaglog import cloudlog
 from iqpilot.system.hardware.power_monitoring import PowerMonitoring, VBATT_LOW_POWER_EXIT
@@ -41,7 +47,8 @@ CAN_STARTUP_RECOVERY_MAX_ATTEMPTS = 2
 
 ThermalBand = namedtuple("ThermalBand", ['min_temp', 'max_temp'])
 HardwareState = namedtuple("HardwareState", ['network_type', 'network_info', 'network_strength', 'network_stats',
-                                             'network_metered', 'modem_temps'])
+                                             'network_metered', 'modem_temps', 'usb_state', 'usb_link_errors',
+                                             'usb3_lane'])
 
 # List of thermal bands. We will stay within this region as long as we are within the bounds.
 # When exiting the bounds, we'll jump to the lower or higher band. Bands are ordered in the dict.
@@ -161,6 +168,56 @@ class _CarParamsCache:
 
 
 
+class EgpuDockFlasher:
+  """Flash the dock's firmware offroad when it does not match what we ship.
+
+  Same policy as stock: the model runtime ignores a dock until its product
+  string matches, so a mismatched dock is unusable until this runs. Bounded
+  attempts, offroad only, one flash in flight at a time.
+  """
+  MAX_ATTEMPTS = 3
+  RETRY_INTERVAL = 20.
+
+  def __init__(self):
+    self.thread: threading.Thread | None = None
+    self.attempts = 0
+    self.last_attempt = 0.
+    self.flashed = False
+    self.mismatch = False
+
+  @property
+  def failed(self) -> bool:
+    return (self.mismatch and self.attempts >= self.MAX_ATTEMPTS
+            and self.thread is not None and not self.thread.is_alive() and not self.flashed)
+
+  def flash(self) -> None:
+    ret = subprocess.run(["sudo", sys.executable,
+                          os.path.join(BASEDIR, "iqpilot/system/hardware/egpu_dock/flash.py")],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+    cloudlog.event("egpu dock flash done", returncode=ret.returncode, output=ret.stdout[-1000:],
+                   error=ret.returncode != 0)
+    self.flashed = ret.returncode == 0
+
+  def update(self, offroad: bool, usb_state: list[dict]) -> None:
+    self.mismatch = dock_needs_flash(usb_state)
+    if not self.mismatch:
+      self.flashed = False
+      return
+
+    if not offroad or self.flashed or self.attempts >= self.MAX_ATTEMPTS:
+      return
+    if self.thread is not None and self.thread.is_alive():
+      return
+    if time.monotonic() - self.last_attempt < self.RETRY_INTERVAL:
+      return
+
+    self.attempts += 1
+    self.last_attempt = time.monotonic()
+    cloudlog.warning(f"egpu dock firmware out of date, flashing (attempt {self.attempts})")
+    self.thread = threading.Thread(target=self.flash, daemon=True)
+    self.thread.start()
+
+
 def set_offroad_alert_if_changed(offroad_alert: str, show_alert: bool, extra_text: str | None=None):
   if prev_offroad_states.get(offroad_alert, None) == (show_alert, extra_text):
     return
@@ -254,6 +311,9 @@ def hw_state_thread(end_event, hw_queue):
           network_stats={'wwanTx': tx, 'wwanRx': rx},
           network_metered=HARDWARE.get_network_metered(network_type),
           modem_temps=modem_temps,
+          usb_state=get_usb_state(),
+          usb_link_errors=get_link_error_count(),
+          usb3_lane=usb3_lane(),
         )
 
         try:
@@ -280,7 +340,7 @@ def hw_state_thread(end_event, hw_queue):
 
 def hardware_thread(end_event, hw_queue) -> None:
   pm = messaging.PubMaster(['deviceState', 'iqPerfTrace'])
-  sm = messaging.SubMaster(["peripheralState", "gpsLocationExternal", "selfdriveState", "pandaStates", "carState"], poll="pandaStates")
+  sm = messaging.SubMaster(["peripheralState", "gpsLocationExternal", "selfdriveState", "pandaStates", "carState", "egpuDockState"], poll="pandaStates")
   perf = PerfTraceEmitter("hardwared", pubmaster=pm)
 
   count = 0
@@ -306,6 +366,9 @@ def hardware_thread(end_event, hw_queue) -> None:
     network_strength=NetworkStrength.unknown,
     network_stats={'wwanTx': -1, 'wwanRx': -1},
     modem_temps=[],
+    usb_state=[],
+    usb_link_errors=0,
+    usb3_lane="unknown",
   )
 
   all_temp_filter = FirstOrderFilter(0., TEMP_TAU, DT_HW, initialized=False)
@@ -332,6 +395,8 @@ def hardware_thread(end_event, hw_queue) -> None:
   thermal_config = HARDWARE.get_thermal_config()
 
   fan_controller = FanController()
+  egpu_dock_flasher = EgpuDockFlasher()
+  egpu_dock_status = EgpuDockStatus()
 
   while not end_event.is_set():
     sm.update(PANDA_STATES_TIMEOUT)
@@ -427,6 +492,14 @@ def hardware_thread(end_event, hw_queue) -> None:
       msg.deviceState.networkInfo = last_hw_state.network_info
 
     msg.deviceState.modemTempC = last_hw_state.modem_temps
+    set_usb_state(msg.deviceState, last_hw_state.usb_state, last_hw_state.usb_link_errors,
+                  last_hw_state.usb3_lane)
+    egpu_dock_flasher.update(started_ts is None, last_hw_state.usb_state)
+    egpu_valid = sm.alive["egpuDockState"] and sm.valid["egpuDockState"]
+    egpu_dock_status.update(started_ts is None, last_hw_state.usb_state, egpu_dock_flasher.failed,
+                            params.get_bool("UsbGpuLoading"), params.get("UsbGpuActive"),
+                            params.get_bool("UsbGpuCompiled"),
+                            sm["egpuDockState"] if egpu_valid else None, set_offroad_alert_if_changed)
 
     msg.deviceState.screenBrightnessPercent = HARDWARE.get_screen_brightness()
 

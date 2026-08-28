@@ -53,6 +53,16 @@ def manager_init() -> None:
   except Exception:
     cloudlog.exception("recover_unclean_segments failed")
 
+  try:
+    from iqpilot.system.hardware import TICI
+    if TICI:
+      from iqpilot.system.hardware.tici.usb_storage import ensure_ncm_gadget, suspend_usb_input
+      ensure_ncm_gadget()
+      if Params().get_bool("IQEmacEnabled") or Params().get_bool("IQEgpuEnabled"):
+        suspend_usb_input(True)
+  except Exception:
+    cloudlog.exception("emac usb setup failed")
+
   build_metadata = get_build_metadata()
 
   params = Params()

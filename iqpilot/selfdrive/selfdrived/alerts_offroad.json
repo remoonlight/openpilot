@@ -54,5 +54,33 @@
     "text": "<b>Unsupported branch!</b> - The current version of <b><u>%1</u></b> is not marked as compatible with the Comma Three (3|tici). Please go to <b>[Device > Software]</b> and install a supported branch such as <b><u>release</u></b> or <b><u>beta</u></b> for the comma three.",
     "severity": 1,
     "_comment": "Set extra field to the current branch name."
+  },
+  "Offroad_EgpuNotDetected": {
+    "text": "eGPU dock not detected. Check USB and 12V connections.",
+    "severity": 0
+  },
+  "Offroad_EgpuFansObstructed": {
+    "text": "eGPU dock fans obstructed. Check the fans.",
+    "severity": 0
+  },
+  "Offroad_EgpuOverheated": {
+    "text": "eGPU dock overheated. Allow it to cool.",
+    "severity": 0
+  },
+  "Offroad_EgpuPcieUnavailable": {
+    "text": "eGPU dock PCIe unavailable. %1",
+    "severity": 0
+  },
+  "Offroad_EgpuUncompiled": {
+    "text": "eGPU big model not compiled. Keep ignition on and reboot the device.",
+    "severity": 0
+  },
+  "Offroad_EgpuUpdateFailed": {
+    "text": "eGPU dock update failed. Check the USB cable.",
+    "severity": 0
+  },
+  "Offroad_EgpuUsbSlow": {
+    "text": "eGPU dock USB link is slow. Check the USB cable. The current speed is %1.",
+    "severity": 0
   }
 }

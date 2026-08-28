@@ -193,6 +193,22 @@ def accel_during_driver_override(accel: float, gas_pressed: bool, keep_long_acti
   return 0.0 if gas_pressed and keep_long_active else accel
 
 
+def ea_send_ready(stock_values, last_counter):
+  return bool(stock_values) and stock_values["COUNTER"] != last_counter
+
+
+EA_BLINKER_STEP = 2
+
+
+def next_ea_counter(tx_counter, stock_counter):
+  return ((stock_counter if tx_counter is None else tx_counter) + 1) % 16
+
+
+def ea_blinker_command(left_request, right_request, left_active, right_active):
+  blinker_active = left_active or right_active
+  return left_request and not blinker_active, right_request and not blinker_active
+
+
 class CarController(CarControllerBase):
   def __init__(self, dbc_names, CP, CP_IQ):
     from iqpilot.system.proprietary_runtime._verified_import import import_verified_module
@@ -241,6 +257,8 @@ class CarController(CarControllerBase):
     self.sng_handoff_active = False
     self.acc_counter_seeded = False
     self.klr_counter_last = None
+    self.ea_counter_last = None
+    self.ea_tx_counter = None
     self.eps_timer_soft_disable_alert = False
     self.hca_frame_timer_running = 0
     self.hca_frame_same_torque = 0
@@ -462,9 +480,14 @@ class CarController(CarControllerBase):
         self.klr_counter_last = CS.klr_stock_values["COUNTER"]
 
     if self.CP.flags & (VolkswagenFlags.MEB | VolkswagenFlags.MQB_EVO):
-      if self.frame % 2 == 0:
+      if CS.ea_hud_stock_values and self.frame % EA_BLINKER_STEP == 0:
+        self.ea_tx_counter = next_ea_counter(self.ea_tx_counter, CS.ea_hud_stock_values["COUNTER"])
+        left_blinker, right_blinker = ea_blinker_command(
+          CC.leftBlinker, CC.rightBlinker, CS.left_blinker_active, CS.right_blinker_active,
+        )
         can_sends.append(self.CCS.create_blinker_control(self.packer_pt, self.CAN.pt, CS.ea_hud_stock_values, CS.ea_control_stock_values,
-                                                         CC.leftBlinker, CC.rightBlinker, self.hide_ea_error))
+                                                         left_blinker, right_blinker, self.hide_ea_error, self.ea_tx_counter))
+        self.ea_counter_last = CS.ea_hud_stock_values["COUNTER"]
 
     if self.CP.openpilotLongitudinalControl and self.CCS in (mqbcan, mlbcan) and not self.acc_counter_seeded and CS.acc_stock_counters:
       seed_msgs = ("ACC_01", "ACC_02") if self.CCS is mlbcan else ("ACC_02", "ACC_06", "ACC_07", "ACC_10")

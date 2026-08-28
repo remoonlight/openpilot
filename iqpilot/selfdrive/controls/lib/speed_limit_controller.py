@@ -261,10 +261,11 @@ class IQSpeedLimitAssist:
       for btn in sm["carState"].buttonEvents:
         if btn.pressed:
           continue
-        if is_lower and btn.type in CONFIRM_LOWER_BUTTONS:
+        button_type = getattr(btn.type, "raw", btn.type)
+        if is_lower and button_type in CONFIRM_LOWER_BUTTONS:
           confirmed = True
           break
-        elif not is_lower and btn.type in CONFIRM_HIGHER_BUTTONS:
+        elif not is_lower and button_type in CONFIRM_HIGHER_BUTTONS:
           confirmed = True
           break
     except (AttributeError, TypeError):
@@ -314,6 +315,10 @@ class SpeedLimitController:
 
     self.override_slc = False
     self.overridden_speed = 0.0
+    self._last_override_request_id = 0
+    self._blocked_override_gesture = 0
+    self._override_limit = None
+    self._override_set_speed = False
 
     self._resolved_limit = 0.0
     self._resolved_source = "None"
@@ -807,9 +812,44 @@ class SpeedLimitController:
       self.pending_events.append(EventNameIQ.constructionZoneDetected)
     self._czone_was_limiting = czone_limiting
 
+  def reset_override(self, sm):
+    self.override_slc = False
+    self.overridden_speed = 0.0
+    self._last_override_request_id = int(getattr(sm["iqCarState"], "slcSetSpeedRequestId", 0))
+    self._blocked_override_gesture = int(getattr(sm["iqCarState"], "slcSetSpeedGestureId", 0))
+    self._override_limit = None
+
   def update_override(self, v_cruise, v_cruise_diff, v_ego, v_ego_diff, sm, slc_params, is_metric):
     offset = self.get_offset(is_metric)
     target = self._assist.target
+    set_speed_override = slc_params.get("speed_limit_controller_override_set_speed", False)
+    mode_changed = set_speed_override != self._override_set_speed
+    self._override_set_speed = set_speed_override
+
+    if set_speed_override:
+      request_id = int(getattr(sm["iqCarState"], "slcSetSpeedRequestId", 0))
+      gesture_id = int(getattr(sm["iqCarState"], "slcSetSpeedGestureId", 0))
+      request_speed = float(getattr(sm["iqCarState"], "slcSetSpeedRequestKph", 0.0)) * CV.KPH_TO_MS
+      new_request = request_id != self._last_override_request_id
+      limit = (target, self._assist.source)
+      reset = (mode_changed or limit != self._override_limit or self._assist.just_confirmed or
+               self._assist.state == SpeedLimitAssistState.preActive or
+               not bool(getattr(sm["selfdriveState"], "enabled", False)) or target <= 0 or self._resolved_source == "Construction")
+      cruise_speed = v_cruise + v_cruise_diff
+      above_limit = cruise_speed > target + offset + 1e-3
+      if reset or (self.override_slc and not above_limit):
+        self.reset_override(sm)
+      elif above_limit:
+        driver_increase = new_request and gesture_id != self._blocked_override_gesture and request_speed > target + offset + 1e-3
+        gas_override = sm["carState"].gasPressed and v_ego > target + offset
+        self.override_slc = self.override_slc or driver_increase or gas_override
+        self.overridden_speed = cruise_speed if self.override_slc else 0.0
+      self._last_override_request_id = request_id
+      self._override_limit = limit
+      return
+
+    if mode_changed:
+      self.reset_override(sm)
 
     self.override_slc = self.overridden_speed > target + offset > 0
     self.override_slc |= sm["carState"].gasPressed and v_ego > target + offset > 0
@@ -820,7 +860,5 @@ class SpeedLimitController:
         if sm["carState"].gasPressed:
           self.overridden_speed = max(v_ego + v_ego_diff, self.overridden_speed)
         self.overridden_speed = float(np.clip(self.overridden_speed, target + offset, v_cruise + v_cruise_diff))
-      elif slc_params.get("speed_limit_controller_override_set_speed", False):
-        self.overridden_speed = v_cruise + v_cruise_diff
     else:
       self.overridden_speed = 0.0

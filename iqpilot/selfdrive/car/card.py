@@ -253,6 +253,9 @@ class Car:
     # TODO: mirror the carState.cruiseState struct?
     CS.vCruise = float(self.v_cruise_helper.v_cruise_kph)
     CS.vCruiseCluster = float(self.v_cruise_helper.v_cruise_cluster_kph)
+    CS_IQ.slcSetSpeedRequestId = self.v_cruise_helper.slc_set_speed_request_id
+    CS_IQ.slcSetSpeedGestureId = self.v_cruise_helper.slc_set_speed_gesture_id
+    CS_IQ.slcSetSpeedRequestKph = self.v_cruise_helper.slc_set_speed_request_kph
 
     return CS, CS_IQ, RD
 

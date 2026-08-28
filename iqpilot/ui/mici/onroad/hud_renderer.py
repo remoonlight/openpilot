@@ -5,11 +5,12 @@ import pyray as rl
 
 from iqpilot.selfdrive.ui.mici.onroad.hud_renderer import HudRenderer
 from iqpilot.ui.onroad.hud_overlays import IQBlindSpotOverlay
+from iqpilot.ui.mici.onroad.emac_source import EmacSourceIndicator
 
 class IQMiciHudRenderer(HudRenderer):
   def __init__(self):
     super().__init__()
-    self._overlays = [IQBlindSpotOverlay()]
+    self._overlays = [IQBlindSpotOverlay(), EmacSourceIndicator()]
 
   def _update_state(self) -> None:
     super()._update_state()

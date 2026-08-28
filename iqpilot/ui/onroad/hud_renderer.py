@@ -16,6 +16,7 @@ from iqpilot.ui.onroad.hud_overlays import (
 )
 from iqpilot.ui.onroad.nav_map_panel import NavMapPanel
 from iqpilot.ui.onroad.soft_warning import SoftWarningRenderer
+from iqpilot.ui.onroad.emac_status import EmacStatusRenderer
 
 ENABLE_FLOATING_NAV_MAP_PANEL = False
 ENABLE_SPLIT_NAV_MAP_PANEL = True
@@ -25,6 +26,7 @@ class IQHudRenderer(HudRenderer):
   def __init__(self):
     super().__init__()
     self.developer_ui = IQDevMetricsOverlay()
+    self.emac_status = EmacStatusRenderer()
     self.nav_map_panel = NavMapPanel()
     self.road_name_renderer = RoadNameRenderer()
     self.rocket_fuel = IQAccelBar()
@@ -38,6 +40,7 @@ class IQHudRenderer(HudRenderer):
     super()._update_state()
     if ENABLE_FLOATING_NAV_MAP_PANEL or ENABLE_SPLIT_NAV_MAP_PANEL:
       self.nav_map_panel.update()
+    self.emac_status.update()
     self.road_name_renderer.update()
     self.speed_limit_renderer.update()
     has_limit = self.speed_limit_renderer.speed_limit_valid or self.speed_limit_renderer.speed_limit_last_valid
@@ -65,6 +68,7 @@ class IQHudRenderer(HudRenderer):
       self.developer_ui.render(rect)
     if ENABLE_FLOATING_NAV_MAP_PANEL:
       self.nav_map_panel.render(rect)
+    self.emac_status.render(rect)
     self.road_name_renderer.render(torque_rect)
     self.turn_signal_controller.render(rect)
     self.soft_warning_renderer.render(rect)

@@ -21,6 +21,10 @@ CACHE_SIZE = 10 * 1024 * 1024 * 1024  # total cache size in GB
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
+USER_AGENT = os.getenv("IQPILOT_HTTP_USER_AGENT", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+
+
 def _env_int(name: str, default: int) -> int:
   raw = os.getenv(name)
   if raw is None:
@@ -113,6 +117,10 @@ class URLFile:
     pass
 
   def _request(self, method: str, url: str, headers: dict[str, str] | None = None) -> BaseHTTPResponse:
+    # the data host is behind cloudflare, which answers a default urllib3 agent
+    # with a 1010 block. It reads as 403 Forbidden on a correctly signed url, so
+    # it looks like an auth problem and is not one.
+    headers = {**(headers or {}), "User-Agent": USER_AGENT}
     try:
       return URLFile.pool_manager().request(method, url, timeout=self._timeout, headers=headers)
     except MaxRetryError as e:

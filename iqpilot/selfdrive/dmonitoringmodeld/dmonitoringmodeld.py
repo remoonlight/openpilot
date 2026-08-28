@@ -109,6 +109,13 @@ def get_driverstate_packet(model_output, frame_id: int, location_ts: int, exec_t
 def main():
   config_realtime_process(7, 5)
 
+  # Set in the child, not at import: manager preimports every process module in the parent,
+  # so an import-time write lands in one shared env that all children inherit (and setdefault
+  # in a child is then a guaranteed no-op). tinygrad reads this lazily at QCOMDevice init.
+  # KGSL: lower value = higher priority. DM has no 50ms deadline; at the driving contexts'
+  # default 8 its kernels interleave with the warp and blow its submit tail 16ms -> 72ms p90.
+  os.environ['QCOM_PRIORITY'] = os.getenv('DMON_QCOM_PRIORITY', '12')
+
   cl_context = CLContext()
   model = ModelState(cl_context)
   cloudlog.warning("models loaded, dmonitoringmodeld starting")

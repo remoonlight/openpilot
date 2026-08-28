@@ -143,6 +143,9 @@ class SelfdriveD(GapButtonActions):
     self.events = Events()
 
     self.initialized = False
+    self.big_model_loading = False
+    self.big_model_active = False
+    self.big_model_failed = False
     self.enabled = False
     self.active = False
     self.mismatch_counter = 0
@@ -269,6 +272,28 @@ class SelfdriveD(GapButtonActions):
     if self.sm['controlsState'].lateralControlState.which() == 'debugState':
       self.events.add(EventName.joystickDebug)
       self.startup_event = None
+
+    if self.sm['deviceState'].egpuDockPresent or self.params.get_bool("IQEgpuEnabled") or self.big_model_active:
+      loading = self.params.get_bool("UsbGpuLoading")
+      self.big_model_loading = loading
+      if self.big_model_loading:
+        self.events.add(EventName.bigModelLoading)
+
+      big_active = self.params.get("UsbGpuActive")
+      dock_present = self.sm['deviceState'].egpuDockPresent
+      mac_active = self.params.get_bool("MacModelActive")
+      model_unavailable = big_active is True and self.sm.seen['modelV2'] and not self.sm.alive['modelV2']
+      big_failed = (big_active is False or model_unavailable
+                    or (self.big_model_active and not dock_present)) and not mac_active
+      if big_failed:
+        self.events.add(EventName.bigModelFailed)
+      self.big_model_failed = big_failed
+
+      # soft disable if the big model fails
+      if big_active:
+        self.big_model_active = True
+      if mac_active or (not self.enabled and not model_unavailable):
+        self.big_model_active = False
 
     if self.sm.recv_frame['lateralManeuverPlan'] > 0:
       self.events.add(EventName.lateralManeuver)

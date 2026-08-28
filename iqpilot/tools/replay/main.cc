@@ -1,4 +1,5 @@
 #include <getopt.h>
+#include <unistd.h>
 
 #include <iomanip>
 #include <iostream>
@@ -174,6 +175,15 @@ int main(int argc, char *argv[]) {
     }
 
     return 0;
+  }
+
+  // REPLAY_HEADLESS: skip ncurses, which needs a real TTY and swallows all
+  // replay log output into its UI — required when driven from a service
+  if (getenv("REPLAY_HEADLESS") != nullptr) {
+    replay.start(config.start_seconds);
+    while (true) {
+      pause();
+    }
   }
 
   ConsoleUI console_ui(&replay);

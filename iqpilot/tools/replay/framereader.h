@@ -37,6 +37,7 @@ public:
   struct PacketInfo {
     int flags;
     int64_t pos;
+    int64_t ts;  // dts; byte pos is useless for seeking in mp4 containers
   };
   std::vector<PacketInfo> packets_info;
 };
@@ -72,11 +73,12 @@ private:
 class QcomVideoDecoder : public VideoDecoder {
 public:
   QcomVideoDecoder() {};
-  ~QcomVideoDecoder() override {};
+  ~QcomVideoDecoder() override;
   bool open(AVCodecParameters *codecpar, bool hw_decoder) override;
   bool decode(FrameReader *reader, int idx, VisionBuf *buf) override;
 
 private:
   MsmVidc msm_vidc = MsmVidc();
+  AVBSFContext *bsf_ = nullptr;  // AVCC (mp4) -> Annex-B for msm_vidc
 };
 #endif

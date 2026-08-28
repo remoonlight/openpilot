@@ -78,32 +78,38 @@ unbind() {
   fi
 }
 
+set_attr() {
+  [ "$(cat "$1" 2>/dev/null)" = "$2" ] && return 0
+  echo "$2" | sudo tee "$1" >/dev/null 2>&1 || true
+}
+
 ensure_base() {
   if ! mountpoint -q /config; then
     sudo mount -t configfs none /config
   fi
   sudo mkdir -p "$GADGET/strings/0x409" "$GADGET/configs/c.1/strings/0x409"
   cd "$GADGET"
-  [ -s idVendor ] || echo 0x04D8 | sudo tee idVendor >/dev/null
-  [ -s idProduct ] || echo 0x1235 | sudo tee idProduct >/dev/null
-  [ -s strings/0x409/serialnumber ] || echo "$(cat /proc/cmdline | sed -e 's/^.*androidboot.serialno=//' -e 's/ .*$//')" | sudo tee strings/0x409/serialnumber >/dev/null
-  [ -s strings/0x409/manufacturer ] || echo "comma.ai" | sudo tee strings/0x409/manufacturer >/dev/null
-  [ -s strings/0x409/product ] || echo "IQ.Pilot" | sudo tee strings/0x409/product >/dev/null
-  [ -s configs/c.1/MaxPower ] || echo 250 | sudo tee configs/c.1/MaxPower >/dev/null
-  [ -s configs/c.1/strings/0x409/configuration ] || echo "IQ.Pilot" | sudo tee configs/c.1/strings/0x409/configuration >/dev/null
+  # `[ -s ]` never guards a configfs attribute: an unset idVendor still reads back
+  # as "0x0000", so those writes were all skipped and the gadget stayed nameless
+  set_attr idVendor 0x04D8
+  set_attr idProduct 0x1235
+  set_attr strings/0x409/serialnumber "$(sed -e 's/^.*androidboot.serialno=//' -e 's/ .*$//' /proc/cmdline)"
+  set_attr strings/0x409/manufacturer "comma.ai"
+  set_attr strings/0x409/product "IQ.Pilot"
+  set_attr configs/c.1/MaxPower 250
+  set_attr configs/c.1/strings/0x409/configuration "IQ.Pilot"
 }
 
 add_adb() {
   # same rationale as add_mass_storage: start from a clean slate to avoid stale busy attributes
   remove_adb
   cd "$GADGET"
-  sudo mkdir -p functions/ncm.0 functions/ffs.adb
+  sudo mkdir -p functions/ffs.adb
   sudo mkdir -p /dev/usb-ffs/adb
   if ! mountpoint -q /dev/usb-ffs/adb; then
     sudo mount -t functionfs adb /dev/usb-ffs/adb
   fi
-  sudo rm -f configs/c.1/ncm.0 configs/c.1/ffs.adb
-  sudo ln -s functions/ncm.0 configs/c.1/
+  sudo rm -f configs/c.1/ffs.adb
   sudo ln -s functions/ffs.adb configs/c.1/
   setprop service.adb.tcp.port -1 2>/dev/null || true
   sudo systemctl start adbd
@@ -115,9 +121,42 @@ remove_adb() {
   sudo systemctl stop adbd || true
   if [ -d "$GADGET" ]; then
     cd "$GADGET"
-    sudo rm -f configs/c.1/ncm.0 configs/c.1/ffs.adb
+    sudo rm -f configs/c.1/ffs.adb
     sudo umount /dev/usb-ffs/adb 2>/dev/null || true
-    sudo rmdir functions/ncm.0 functions/ffs.adb 2>/dev/null || true
+    sudo rmdir functions/ffs.adb 2>/dev/null || true
+  fi
+}
+
+# ncm carries the usb0 ethernet link. ADB needs it, but so does the Mac-backed
+# model worker with ADB off, so it is enabled independently of either.
+# the kernel randomises the ncm MACs every boot, so macOS sees a new adapter each
+# time and orphans the network service holding the link's static address
+ncm_id() {
+  local id
+  id=$(tr -dc '0-9a-f' < /data/params/d/DongleId 2>/dev/null | tail -c 6)
+  [ ${#id} -eq 6 ] || id="000001"
+  echo "$id"
+}
+
+add_ncm() {
+  remove_ncm
+  cd "$GADGET"
+  sudo mkdir -p functions/ncm.0
+  local id
+  id=$(ncm_id)
+  # best effort: some kernels create the ncm netdev lazily and fail these writes
+  # with ENODEV, and a pinned MAC is never worth losing the whole gadget over
+  echo "02:49:51:${id:0:2}:${id:2:2}:${id:4:2}" | sudo tee functions/ncm.0/host_addr >/dev/null 2>&1 || true
+  echo "06:49:51:${id:0:2}:${id:2:2}:${id:4:2}" | sudo tee functions/ncm.0/dev_addr >/dev/null 2>&1 || true
+  sudo rm -f configs/c.1/ncm.0
+  sudo ln -s functions/ncm.0 configs/c.1/
+}
+
+remove_ncm() {
+  if [ -d "$GADGET" ]; then
+    cd "$GADGET"
+    sudo rm -f configs/c.1/ncm.0
+    sudo rmdir functions/ncm.0 2>/dev/null || true
   fi
 }
 
@@ -162,9 +201,17 @@ USB_STORAGE_ENABLE=0
 read_bool_param "/data/params/d/UsbStorageEnabled" && USB_STORAGE_ENABLE=1
 ADB_ENABLE=0
 read_bool_param "/data/params/d/AdbEnabled" && ADB_ENABLE=1
+EMAC_ENABLE=0
+read_bool_param "/data/params/d/IQEmacEnabled" && EMAC_ENABLE=1
 
 unbind
 ensure_base
+
+if [ "$ADB_ENABLE" == "1" ] || [ "$EMAC_ENABLE" == "1" ]; then
+  add_ncm
+else
+  remove_ncm
+fi
 
 if [ "$ADB_ENABLE" == "1" ]; then
   add_adb

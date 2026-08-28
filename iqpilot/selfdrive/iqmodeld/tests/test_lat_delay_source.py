@@ -34,6 +34,7 @@ def _daemon(params, steer_control_type):
   return SimpleNamespace(
     _params=params,
     _car_params=car_params,
+    _channel=None,
     _sub={"lateralDelay": SimpleNamespace(lateralDelay=LIVE_DELAY)},
     _runtime=SimpleNamespace(lat_delay=None, PLANPLUS_CONTROL=None, model_smoothing_max_extra_sec=None),
     _warps=SimpleNamespace(set_offset=lambda _: None),

@@ -1590,6 +1590,31 @@ _ACTIVE_BUNDLE_KEY = "ModelManager_ActiveBundle"
 _DOWNLOAD_INDEX_KEY = "ModelManager_DownloadIndex"
 _RUNNER_CACHE_KEY = "ModelRunnerTypeCache"
 
+def _big_model_options() -> list[tuple[str, str]]:
+  try:
+    from iqpilot.selfdrive.iqmodeld.emac_model_meta import big_models
+    return big_models(ui_state.params)
+  except Exception:
+    return []
+
+
+def _big_model_label(key: str) -> str:
+  for name, display in _big_model_options():
+    if name == key:
+      return display
+  return key
+
+
+def _refresh_big_catalog() -> None:
+  def worker():
+    try:
+      from iqpilot.selfdrive.iqmodeld.emac_model_meta import refresh_catalog
+      refresh_catalog(ui_state.params)
+    except Exception:
+      pass
+  threading.Thread(target=worker, daemon=True).start()
+
+
 class ModelsLayout(Widget):
   def __init__(self):
     super().__init__()
@@ -1599,6 +1624,7 @@ class ModelsLayout(Widget):
     self.download_status = None
     self.prev_download_status = None
     self.model_dialog = None
+    self._big_model_dialog = None
     self.last_cache_calc_time = 0
 
     self._initialize_items()
@@ -1613,6 +1639,14 @@ class ModelsLayout(Widget):
       action_item=WideButtonAction(lambda: tr("SELECT")),
       callback=self._handle_current_model_clicked
     )
+
+    self.big_model_item = button_item(
+      lambda: tr("Big Model"),
+      lambda: tr("CHANGE"),
+      tr("Only works with external compute connected over USB."),
+      self._handle_big_model_clicked,
+    )
+    self.big_model_item.action_item.set_value(self._big_model_value())
 
     self.supercombo_label = progress_item(tr("Combined Model"))
     self.vision_label = progress_item(tr("Vision Weights"))
@@ -1630,7 +1664,7 @@ class ModelsLayout(Widget):
     self.redownload_item = button_item(lambda: tr("Redownload Current Model"), lambda: tr("REDOWNLOAD"), "", self._redownload_model)
     self.cancel_download_item = button_item(tr("Stop Download"), tr("Cancel"), "", self._cancel_model_request)
 
-    self.items = [self.current_model_item, self.cancel_download_item, self.supercombo_label, self.vision_label,
+    self.items = [self.current_model_item, self.big_model_item, self.cancel_download_item, self.supercombo_label, self.vision_label,
                   self.policy_label, self.redownload_item, self.refresh_item, self.clear_cache_item]
 
   def _is_downloading(self):
@@ -1880,7 +1914,40 @@ class ModelsLayout(Widget):
                                          get_folders_fn=self._get_folders, on_exit=self._on_model_selected)
     gui_app.set_modal_overlay(self.model_dialog, callback=self._on_model_selected)
 
+  @staticmethod
+  def _big_model_value() -> str:
+    if not ui_state.params.get_bool("IQEmacEnabled"):
+      return tr("Off")
+    key = ui_state.params.get("IQEmacModel")
+    key = key.decode() if isinstance(key, bytes) else (key or "")
+    return _big_model_label(key) if key in [n for n, _ in _big_model_options()] else tr("Off")
+
+  def _handle_big_model_clicked(self):
+    options = _big_model_options()
+    if len(options) <= 1:
+      _refresh_big_catalog()
+    keys = [n for n, _ in options]
+    labels = [tr("Off")] + [d for _, d in options]
+    self._big_model_dialog = MultiOptionDialog(tr("Big Model"), labels, self._big_model_value())
+
+    def handle_selection(result):
+      if result == DialogResult.CONFIRM and self._big_model_dialog is not None and self._big_model_dialog.selection:
+        selected = self._big_model_dialog.selection
+        if selected == tr("Off"):
+          ui_state.params.put_bool("IQEmacEnabled", False)
+        else:
+          for key in keys:
+            if _big_model_label(key) == selected:
+              ui_state.params.put("IQEmacModel", key)
+              ui_state.params.put_bool("IQEmacEnabled", True)
+              break
+        self.big_model_item.action_item.set_value(self._big_model_value())
+      self._big_model_dialog = None
+
+    gui_app.set_modal_overlay(self._big_model_dialog, callback=handle_selection)
+
   def _on_refresh_models(self):
+    _refresh_big_catalog()
     ui_state.params.put("ModelManager_LastSyncTime", 0)
     self._refreshing = True
     self._refresh_start = time.monotonic()

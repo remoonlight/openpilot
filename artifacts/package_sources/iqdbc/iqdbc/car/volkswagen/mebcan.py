@@ -55,8 +55,9 @@ def create_eps_update(packer, bus, eps_stock_values, ea_simulated_torque):
   return packer.make_can_msg("LH_EPS_03", bus, values)
 
 
-def create_blinker_control(packer, bus, ea_hud_stock_values, ea_control_stock_values, left_blinker, right_blinker, hide_error):
+def create_blinker_control(packer, bus, ea_hud_stock_values, ea_control_stock_values, left_blinker, right_blinker, hide_error, counter=None):
   values = {s: ea_hud_stock_values[s] for s in [
+    "COUNTER",
     "EA_Texte",
     "ACF_Lampe_Hands_Off",
     "EA_Infotainment_Anf",
@@ -68,6 +69,9 @@ def create_blinker_control(packer, bus, ea_hud_stock_values, ea_control_stock_va
     "EA_Blinken",
     "EA_Unknown",
   ]}
+
+  if counter is not None:
+    values["COUNTER"] = counter
 
   if ea_hud_stock_values["EA_Blinken"] == 0:
     values.update({

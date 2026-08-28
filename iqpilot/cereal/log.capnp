@@ -135,6 +135,8 @@ struct OnroadEvent @0xc4fa6047f024e718 {
     userBookmark @95;
     excessiveActuation @96;
     audioFeedback @97;
+    bigModelLoading @101;
+    bigModelFailed @102;
 
     soundsUnavailableDEPRECATED @47;
   }
@@ -491,6 +493,13 @@ struct DeviceState @0xa4d8b5af2aa492eb {
   started @11 :Bool;
   startedMonoTime @13 :UInt64;
 
+  # ordinals track commaai/openpilot exactly (@50 bottomSocTempC, @51 dock
+  # presence, @52 usbState) so upstream tooling stays able to read our logs;
+  # only the field NAME differs, we do not use comma's internal dock codename.
+  bottomSocTempC @50 :Float32;
+  egpuDockPresent @51 :Bool;
+  usbState @52 :UsbState;
+
   # system utilization
   freeSpacePercent @7 :Float32;
   memoryUsagePercent @19 :Int8;
@@ -584,6 +593,37 @@ struct DeviceState @0xa4d8b5af2aa492eb {
   usbOnlineDEPRECATED @12 :Bool;
   ambientTempCDEPRECATED @30 :Float32;
   nvmeTempCDEPRECATED @35 :List(Float32);
+}
+
+struct UsbState {
+  devices @0 :List(Device);
+  # IQ extension (no upstream equivalent): controller-level link errors, needed
+  # because portli is a CONTROLLER counter and in peripheral mode (eMac gadget
+  # link) the peer never enumerates, so no Device row can carry it.
+  linkErrorCount @1 :UInt32;
+  # IQ extension, same reason: CC orientation describes the PORT, so it is
+  # readable while the link is in peripheral mode. The per-device field below
+  # matches upstream but only populates when something enumerates on that
+  # controller (host mode, e.g. the eGPU dock) — never during an eMac session.
+  usb3Lane @2 :Device.Usb3Lane;
+
+  struct Device {
+    busnum @0 :UInt8;
+    devnum @1 :UInt8;
+    vendorId @2 :UInt16;
+    productId @3 :UInt16;
+    speedMbps @4 :UInt16;
+    manufacturer @6 :Text;
+    product @5 :Text;
+    linkErrorCount @7 :UInt16;
+    usb3Lane @8 :Usb3Lane;
+
+    enum Usb3Lane {
+      unknown @0;
+      a @1;
+      b @2;
+    }
+  }
 }
 
 struct PandaState @0xa7649e2575e4591e {
@@ -743,6 +783,20 @@ struct PeripheralState {
     cdp @2;
     dcp @3;
   }
+}
+
+struct EgpuDockState {
+  tempC @0 :Float32;
+  memoryTempC @1 :Float32;
+  powerDrawW @2 :Float32;
+  powerLimitW @3 :Float32;
+  gpuUsagePercent @4 :UInt8;
+  gpuClockMhz @5 :UInt16;
+  fanSpeedRpm @6 :UInt16;
+  pcieLtssm @7 :UInt8;
+  supplyVoltage @8 :UInt16;  # mV
+  supplyCurrent @9 :Int16;  # mA
+  supplyFault @10 :Bool;
 }
 
 struct RadarState @0x9a185389d6fdd05f {
@@ -1078,6 +1132,7 @@ struct ModelDataV2 {
   timestampEof @3 :UInt64;
   modelExecutionTime @15 :Float32;
   rawPredictions @16 :Data;
+  big @27 :Bool;
 
   # predicted future position, orientation, etc..
   position @4 :XYZTData;
@@ -2668,6 +2723,7 @@ struct Event {
     iqState @153 :Custom.IQState;
     iqModelManager @154 :Custom.IQModelManager;
     iqPlan @155 :Custom.IQPlan;
+    egpuDockState @166 :EgpuDockState;
     iqOnroadEvents @156 :Custom.IQOnroadEvent;
     iqCarParams @157 :Custom.IQCarParams;
     iqCarControl @158 :Custom.IQCarControl;

@@ -1,57 +1,41 @@
-import pytest
+import numpy as np
 
 from iqpilot.system.hardware.fan_controller import FanController
 
-ALL_CONTROLLERS = [FanController]
-
-def patched_controller(mocker, controller_class):
-  mocker.patch("os.system", new=mocker.Mock())
-  return controller_class()
 
 class TestFanController:
-  def wind_up(self, controller, ignition=True):
-    for _ in range(1000):
-      controller.update(100, ignition)
+  def test_ramp_anchors(self):
+    c = FanController()
+    assert c.update(60, True) == 0
+    assert c.update(70, True) == 0
+    assert c.update(85, True) == 80
+    assert c.update(90, True) == 100
+    assert c.update(100, True) == 100
 
-  def wind_down(self, controller, ignition=False):
-    for _ in range(1000):
-      controller.update(10, ignition)
+  def test_ramp_is_monotonic_and_continuous(self):
+    c = FanController()
+    temps = np.arange(50.0, 105.0, 0.25)
+    outs = [c.update(t, True) for t in temps]
+    assert all(b >= a for a, b in zip(outs, outs[1:]))
+    # no step may exceed the steepest segment's slope (4 %/deg) over a 0.25 deg move
+    assert max(b - a for a, b in zip(outs, outs[1:])) <= 2
 
-  @pytest.mark.parametrize("controller_class", ALL_CONTROLLERS)
-  def test_hot_onroad(self, mocker, controller_class):
-    controller = patched_controller(mocker, controller_class)
-    self.wind_up(controller)
-    assert controller.update(100, True) >= 70
+  def test_hot_onroad(self):
+    assert FanController().update(100, True) >= 70
 
-  @pytest.mark.parametrize("controller_class", ALL_CONTROLLERS)
-  def test_offroad_limits(self, mocker, controller_class):
-    controller = patched_controller(mocker, controller_class)
-    self.wind_up(controller)
-    assert controller.update(100, False) <= 30
+  def test_offroad_capped(self):
+    c = FanController()
+    for t in (60, 75, 85, 100):
+      assert c.update(t, False) <= 30
 
-  @pytest.mark.parametrize("controller_class", ALL_CONTROLLERS)
-  def test_no_fan_wear(self, mocker, controller_class):
-    controller = patched_controller(mocker, controller_class)
-    self.wind_down(controller)
-    assert controller.update(10, False) == 0
+  def test_no_fan_wear(self):
+    assert FanController().update(10, False) == 0
 
-  @pytest.mark.parametrize("controller_class", ALL_CONTROLLERS)
-  def test_limited(self, mocker, controller_class):
-    controller = patched_controller(mocker, controller_class)
-    self.wind_up(controller, True)
-    assert controller.update(100, True) == 100
+  def test_max_cool(self):
+    c = FanController()
+    assert c.update(80, True, True) == 100
+    assert c.update(80, False, True) == 100
 
-  @pytest.mark.parametrize("controller_class", ALL_CONTROLLERS)
-  def test_max_cool(self, mocker, controller_class):
-    controller = patched_controller(mocker, controller_class)
-    self.wind_down(controller)
-    assert controller.update(80, True, True) == 100
-    assert controller.update(80, False, True) == 100
-
-  @pytest.mark.parametrize("controller_class", ALL_CONTROLLERS)
-  def test_windup_speed(self, mocker, controller_class):
-    controller = patched_controller(mocker, controller_class)
-    self.wind_down(controller, True)
-    for _ in range(10):
-      controller.update(90, True)
-    assert controller.update(90, True) >= 60
+  def test_target_band_has_airflow(self):
+    # the design centers on 75 C; the curve must actually move air there
+    assert 20 <= FanController().update(75, True) <= 40

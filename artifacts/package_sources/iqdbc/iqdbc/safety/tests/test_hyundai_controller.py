@@ -2,7 +2,7 @@ import pytest
 
 from iqdbc.car import gen_empty_fingerprint, structs
 from iqdbc.car.hyundai.interface import CarInterface
-from iqdbc.car.hyundai.values import CAR
+from iqdbc.car.hyundai.values import CAR, HyundaiFlags
 from iqdbc.safety.tests.libsafety import libsafety_py
 
 
@@ -37,3 +37,24 @@ def test_controller_frames_match_configured_safety(candidate, alpha_long, monkey
       packet = libsafety_py.make_CANPacket(address, bus, data)
       rejection = f"{candidate.value} frame {frame}: safety rejected address={address:#x} bus={bus} data={data.hex()}"
       assert safety.safety_tx_hook(packet), rejection
+
+
+def test_ev6_camera_scc_has_one_lfa_sender(monkeypatch, tmp_path):
+  monkeypatch.setenv("PARAMS_ROOT", str(tmp_path))
+  fingerprint = gen_empty_fingerprint()
+  cp = CarInterface.get_params(CAR.KIA_EV6, fingerprint, [], False, False, False)
+  cp.flags &= ~HyundaiFlags.CANFD_HDA2.value
+  cp.flags |= HyundaiFlags.CANFD_CAMERA_SCC.value
+  cp_iq = CarInterface.get_params_iq(cp, CAR.KIA_EV6, fingerprint, [], False, False, False)
+  interface = CarInterface(cp, cp_iq)
+  interface.update([])
+
+  control = structs.CarControl.new_message()
+  control.enabled = True
+  control.latActive = True
+  control.actuators.torque = 0.01
+
+  for _ in range(20):
+    _, can_sends = interface.apply(control.as_reader(), structs.IQCarControl())
+    assert [(address, bus) for address, _, bus in can_sends if address == 0x12A] == [(0x12A, 0)]
+    assert all(address not in (0xEA, 0x2AF) for address, _, _ in can_sends)

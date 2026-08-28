@@ -108,6 +108,7 @@ _services: dict[str, tuple] = {
   "iqRoadIncidentFeed": (True, 0.2, 1),
   "iqNavRenderState": (True, 5., 10, QueueSize.MEDIUM),
   "iqState": (True, 100., 10),
+  "egpuDockState": (True, 10., 10),
   "iqPlan": (True, 20., 10),
   "iqOnroadEvents": (True, 1., 1),
   "iqDriveModelData": (True, 20., None, QueueSize.MEDIUM),

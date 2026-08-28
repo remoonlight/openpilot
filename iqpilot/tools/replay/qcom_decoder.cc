@@ -43,7 +43,7 @@ bool MsmVidc::init(const char* dev, size_t width, size_t height, uint64_t codec)
   }
   subscribeEvents();
   v4l2_buf_type out_type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-  setPlaneFormat(out_type, V4L2_PIX_FMT_HEVC); // Also allocates the output buffer
+  setPlaneFormat(out_type, codec); // Also allocates the output buffer
   setFPS(FPS);
   request_buffers(fd, out_type, OUTPUT_BUFFER_COUNT);
   util::safe_ioctl(fd, VIDIOC_STREAMON, &out_type, "VIDIOC_STREAMON OUTPUT failed");

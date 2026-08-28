@@ -210,6 +210,7 @@ def _a4_mk4_frames(packer, reverse=False, eps_torque=None):
     packer.make_can_msg("Kombi_02", 1, {"KBI_Inhalt_Tank": 40, "KBI_Kilometerstand": 100000}),
     packer.make_can_msg("Airbag_02", 1, {"AB_Gurtschloss_FA": 3}),
     packer.make_can_msg("Gateway_05", 1, {"BCM1_Rueckfahrlicht_Schalter": int(reverse)}),
+    packer.make_can_msg("LH_EPS_01", 1, {}),
   ]
   if eps_torque is not None:
     msgs.append(packer.make_can_msg("LH_EPS_03", 1, {"EPS_Lenkmoment": abs(eps_torque),

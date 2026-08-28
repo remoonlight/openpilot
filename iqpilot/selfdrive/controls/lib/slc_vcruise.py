@@ -189,6 +189,8 @@ class SLCVCruise:
         self._user_max_speed = v_cruise_cluster
     else:
       self._user_max_speed = 0.0
+    if not slc_params["speed_limit_controller"]:
+      self.slc.reset_override(sm)
     if slc_params["speed_limit_controller"]:
       self.slc.update_limits(dashboard_speed_limit, now, time_validated, v_cruise, v_ego, sm, slc_params)
       self.pending_events = list(getattr(self.slc, 'pending_events', []))

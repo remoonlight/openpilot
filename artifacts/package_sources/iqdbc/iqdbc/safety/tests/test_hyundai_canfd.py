@@ -44,12 +44,12 @@ def test_canfd_steering_limits(safety, param, addr, length):
   assert not safety.safety_tx_hook(canfd_steer(addr, length, 1))
 
   safety.set_controls_allowed(True)
-  assert safety.safety_tx_hook(canfd_steer(addr, length, 10))
-  safety.set_desired_torque_last(512)
-  safety.set_rt_torque_last(512)
-  assert safety.safety_tx_hook(canfd_steer(addr, length, 512))
-  assert not safety.safety_tx_hook(canfd_steer(addr, length, 513))
-  assert not safety.safety_tx_hook(canfd_steer(addr, length, -513))
+  assert safety.safety_tx_hook(canfd_steer(addr, length, 2))
+  safety.set_desired_torque_last(270)
+  safety.set_rt_torque_last(270)
+  assert safety.safety_tx_hook(canfd_steer(addr, length, 270))
+  assert not safety.safety_tx_hook(canfd_steer(addr, length, 271))
+  assert not safety.safety_tx_hook(canfd_steer(addr, length, -271))
 
 
 def test_canfd_tx_whitelist_and_buttons(safety):
@@ -88,6 +88,31 @@ def test_canfd_camera_scc_button_passthrough(safety):
   assert safety.safety_tx_hook(packet(0x1CF, 2, 8, {2: 1}))
   assert not safety.safety_tx_hook(packet(0x1CF, 2, 8, {2: 2}))
   assert safety.safety_tx_hook(packet(0x1CF, 2, 8, {2: 4}))
+
+
+def test_canfd_camera_scc_single_owner_forwarding(safety):
+  safety.set_safety_hooks(CarParams.SafetyModel.hyundaiCanfd, HyundaiSafetyFlags.CAMERA_SCC)
+  safety.init_tests()
+  safety.set_timer(1_000_000)
+
+  assert safety.safety_fwd_hook(2, 0x12A) == -1
+  assert safety.safety_fwd_hook(2, 0x1E0) == -1
+  assert safety.safety_fwd_hook(2, 0x1A0) == 0
+  assert safety.safety_fwd_hook(0, 0xEA) == 2
+  assert not safety.safety_tx_hook(packet(0xEA, 2, 24))
+  assert not safety.safety_tx_hook(packet(0x2AF, 2, 8))
+
+
+def test_canfd_camera_scc_longitudinal_single_owner_forwarding(safety):
+  param = HyundaiSafetyFlags.CAMERA_SCC | HyundaiSafetyFlags.LONG
+  safety.set_safety_hooks(CarParams.SafetyModel.hyundaiCanfd, param)
+  safety.init_tests()
+  safety.set_timer(1_000_000)
+
+  assert safety.safety_fwd_hook(2, 0x12A) == -1
+  assert safety.safety_fwd_hook(2, 0x1A0) == -1
+  assert safety.safety_fwd_hook(0, 0x175) == -1
+  assert safety.safety_fwd_hook(0, 0xEA) == 2
 
 
 def test_canfd_stock_longitudinal_only_allows_cancel(safety):

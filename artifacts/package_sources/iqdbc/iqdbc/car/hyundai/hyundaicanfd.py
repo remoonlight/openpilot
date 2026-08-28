@@ -12,20 +12,6 @@ LaneChangeDirection = log.LaneChangeDirection
 TurnDirection = log.Desire
 
 
-def hyundai_crc8(data: bytes) -> int:
-  poly = 0x2F
-  crc = 0xFF
-
-  for byte in data:
-    crc ^= byte
-    for _ in range(8):
-      if crc & 0x80:
-        crc = ((crc << 1) ^ poly) & 0xFF
-      else:
-        crc = (crc << 1) & 0xFF
-
-  return crc ^ 0xFF
-
 class CanBus(CanBusBase):
   def __init__(self, CP, fingerprint=None, lka_steering=None) -> None:
     super().__init__(CP, fingerprint)
@@ -83,95 +69,6 @@ class CanBus(CanBusBase):
 # 2bb - 2be
 # LKAS
 # 201 - 2a0
-
-
-
-def create_steering_messages_camera_scc(frame, packer, CP, CAN, CC, lat_active, apply_steer, CS, apply_angle, max_torque, angle_control):
-
-  emergency_steering = False
-  if CS.adrv_0x161 is not None:
-    values = CS.adrv_0x161
-    emergency_steering = values["ALERTS_1"] in [11, 12, 13, 14, 15, 21, 22, 23, 24, 25, 26]
-
-
-  ret = []
-  if CS.mdps is not None:
-    values = copy.copy(CS.mdps)
-    #rx_counter = values.pop("COUNTER", None)
-    if angle_control:
-      if CS.lfa_alt is not None:
-        values["LFA2_ACTIVE"] = CS.lfa_alt["LKAS_ANGLE_ACTIVE"]
-    else:
-      if CS.lfa is not None:
-        values["LKA_ACTIVE"] = 1 if CS.lfa["STEER_REQ"] == 1 else 0
-
-    if frame % 1000 < 40:
-      values["STEERING_COL_TORQUE"] += 220
-    #ret.append(packer.make_can_msg("MDPS", CAN.CAM, values, rx_counter = rx_counter))
-    ret.append(packer.make_can_msg("MDPS", CAN.CAM, values))
-
-  if frame % 10 == 0:
-    if CS.steer_touch_2af is not None:
-      values = copy.copy(CS.steer_touch_2af)
-      if frame % 1000 < 40:
-        values["TOUCH_DETECT"] = 3
-        values["TOUCH1"] = 50
-        values["TOUCH2"] = 50
-        values["CHECKSUM_"] = 0
-        dat = packer.make_can_msg("STEER_TOUCH_2AF", 0, values)[1]
-        values["CHECKSUM_"] = hyundai_crc8(dat[1:8])
-
-      ret.append(packer.make_can_msg("STEER_TOUCH_2AF", CAN.CAM, values))
-
-  if angle_control:
-    if CS.lfa_alt is not None:
-      values = copy.copy(CS.lfa_alt)
-      rx_counter = values.pop("COUNTER", None)
-      if emergency_steering:
-        pass
-      else:
-        #values = {} #CS.lfa_alt
-        values["LKAS_ANGLE_ACTIVE"] = 2 if CC.latActive else 1
-        values["LKAS_ANGLE_CMD"] = -apply_angle
-        values["LKAS_ANGLE_MAX_TORQUE"] = max_torque if CC.latActive else 0
-      ret.append(packer.make_can_msg("LFA_ALT", CAN.ECAN, values, rx_counter = rx_counter))
-
-    if CS.lfa is not None:
-      values = copy.copy(CS.lfa)
-      rx_counter = values.pop("COUNTER", None)
-      if not emergency_steering:
-        values["LKA_MODE"] = 0
-        values["LKA_ICON"] = 2 if CC.latActive else 1
-        values["TORQUE_REQUEST"] = -1024  # apply_steer,
-        values["VALUE63"] = 0 # LKA_ASSIST
-        values["STEER_REQ"] = 0  # 1 if lat_active else 0,
-        values["HAS_LANE_SAFETY"] = 0  # hide LKAS settings
-        values["LKA_ACTIVE"] = 3 if CC.latActive else 0  # this changes sometimes, 3 seems to indicate engaged
-        values["VALUE64"] = 0  #STEER_MODE, NEW_SIGNAL_2
-        values["LKAS_ANGLE_CMD"] = -25.6 #-apply_angle,
-        values["LKAS_ANGLE_ACTIVE"] = 0 #2 if lat_active else 1,
-        values["LKAS_ANGLE_MAX_TORQUE"] = 0 #max_torque if lat_active else 0,
-        values["NEW_SIGNAL_1"] = 10
-      ret.append(packer.make_can_msg("LFA", CAN.ECAN, values, rx_counter = rx_counter))
-
-  elif CS.lfa is not None:
-    values = {}
-    values["LKA_MODE"] = 2
-    values["LKA_ICON"] = 2 if lat_active else 1
-    values["TORQUE_REQUEST"] = apply_steer
-    values["STEER_REQ"] = 1 if lat_active else 0
-    values["VALUE64"] = 0  # STEER_MODE, NEW_SIGNAL_2
-    values["HAS_LANE_SAFETY"] = 0
-    values["LKA_ACTIVE"] = 0 # NEW_SIGNAL_1
-
-    values["DampingGain"] = 0 if lat_active else 100
-    #values["VALUE63"] = 0
-
-    #values["VALUE82_SET256"] = 0
-
-    ret.append(packer.make_can_msg("LFA", CAN.ECAN, values))
-
-  return ret
 
 def create_steering_messages(packer, CP, CAN, enabled, lat_active, apply_steer, apply_angle, max_torque, angle_control):
 

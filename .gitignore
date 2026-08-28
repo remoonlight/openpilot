@@ -142,6 +142,7 @@ TASK.md
 /iqpilot/selfdrive/iqlocd/models/generated/car.cpp
 /iqpilot/selfdrive/iqlocd/models/generated/car.h
 /iqpilot/tools/scripts/debug/
+/iqpilot/tools/scripts/plans/
 !scripts/iqpilot/iqos_usrlocal_larch64.tar.zst
 
 # pretty-build capture logs (model compile / mpc + dbc codegen stdout+stderr)
@@ -182,3 +183,12 @@ iqpilot/selfdrive/ui/tests/test_ui/nav_demo_report/
 
 # fetcher: closed-source precompiled component — ship only the obfuscated .so
 /iqpilot/models_private_src/fetcher.py
+
+# build output: a signed .app is a 233-file sealed bundle, never track a subset
+iqpilot/tools/iqmacd/macos/dist/IQ eMac.app/
+iqpilot/tools/iqmacd/macos/dist/.stage/
+iqpilot/tools/iqmacd/macos/dist/.DS_Store
+
+iqpilot/tools/iqmacd/macos/dist/
+
+iqpilot/tools/scripts/iqemac/clips/README.md

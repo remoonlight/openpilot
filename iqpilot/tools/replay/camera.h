@@ -38,5 +38,6 @@ protected:
       {.type = WideRoadCam, .stream_type = VISION_STREAM_WIDE_ROAD},
   };
   std::atomic<int> publishing_ = 0;
+  uint64_t sent_count_ = 0;
   std::unique_ptr<VisionIpcServer> vipc_server_;
 };

@@ -131,6 +131,7 @@ struct IQModelManager @0xe91d6987759290bb {
       policy @3;
       offPolicy @4;
       onPolicy @5;
+      usbeMac @6;
     }
   }
 
@@ -440,6 +441,9 @@ struct IQCarState @0xb1c39318bb6bc2b3 {
   # VW PQ stock ACC radar feedback for the IQ.Dynamics radar_manager (Blend feature)
   accRadarStaAdr @4 :UInt8;   # ACC_System.ACS_Sta_ADR (0 not-active, 1 active, 2 passive, 3 irrev_Fehler)
   accRadarFehler @5 :Bool;    # ACC_System.ACS_Fehler (stored fault -> radar dead for the drive)
+  slcSetSpeedRequestId @6 :UInt32;
+  slcSetSpeedGestureId @7 :UInt32;
+  slcSetSpeedRequestKph @8 :Float32;
 }
 
 struct IQLiveData @0xf2e2b608e51f4b0e {
