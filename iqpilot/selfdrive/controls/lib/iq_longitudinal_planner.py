@@ -26,6 +26,21 @@ SpeedLimitSource = custom.IQPlan.SpeedLimit.Source
 NavProvider = custom.IQNavState.LongitudinalProvider
 NavLongitudinalState = custom.IQNavState.LongitudinalState
 
+_LEAD_MOVING_MS = 1.0
+_STANDSTILL_HOLD_MS = 0.75
+
+
+def hold_at_standstill(CS, *, light_stop_active: bool = False, lead_moving: bool = False) -> bool:
+  """Hold after an active stop. Resume when the lead moves or the driver presses gas. No APK/BLE."""
+  if not light_stop_active:
+    return False
+  if lead_moving or bool(getattr(CS, "gasPressed", False)):
+    return False
+  if bool(getattr(CS, "standstill", False)):
+    return True
+  return float(getattr(CS, "vEgo", 0.0) or 0.0) <= _STANDSTILL_HOLD_MS
+
+
 class LongitudinalPlannerIQ:
   def __init__(self, CP: structs.CarParams, CP_IQ: structs.IQCarParams, mpc):
     self.events_iq = IQEvents()
@@ -111,11 +126,33 @@ class LongitudinalPlannerIQ:
       LongitudinalPlanSource.cruise: v_cruise,
       LongitudinalPlanSource.speedLimitAssist: slc_v_cruise,
     }
-    if self.nav_valid:
+    has_follow_lead = False
+    lead_moving = False
+    try:
+      lead = sm['radarState'].leadOne
+      has_follow_lead = bool(getattr(lead, "status", False))
+      lead_moving = has_follow_lead and float(getattr(lead, "vLead", 0.0) or 0.0) > _LEAD_MOVING_MS
+    except Exception:
+      pass
+    # Lead present → follow (cruise/MPC). Do not let nav set speed.
+    if self.nav_valid and not has_follow_lead:
       targets[LongitudinalPlanSource.nav] = self.nav_speed_target
 
     self.source = min(targets, key=lambda k: targets[k])
     self.output_v_target = targets[self.source]
+    vision_stop = False
+    try:
+      vision_stop = bool(self.iq_dynamic.force_stop_requested())
+    except Exception:
+      vision_stop = False
+    if hold_at_standstill(
+      CS,
+      light_stop_active=bool(vision_stop or self.forcing_stop),
+      lead_moving=lead_moving,
+    ):
+      self.output_v_target = 0.0
+      if self.output_a_target > 0.0:
+        self.output_a_target = 0.0
     self.output_v_target = self._apply_force_stop(self.output_v_target, v_ego, sm, slc_apply_enabled)
     # envelope shaping only in Assist mode: info/warn must never change the plan
     self._envelope_enabled = (slc_apply_enabled and bool(getattr(self.slimit, "controller_enabled", False))

@@ -55,6 +55,21 @@ def get_lead_distance(radarState):
     return radarState.leadTwo.dRel
   return 0
 
+
+def apply_follow_standstill_hold(CS, sm, output_a_target, output_should_stop):
+  """Keep an MPC stop until the lead moves or gas. No APK/BLE."""
+  lead_moving = False
+  try:
+    lead = sm['radarState'].leadOne
+    lead_moving = bool(getattr(lead, "status", False)) and float(getattr(lead, "vLead", 0.0) or 0.0) > 1.0
+  except Exception:
+    pass
+  if lead_moving or bool(getattr(CS, "gasPressed", False)):
+    return bool(output_should_stop), output_a_target
+  if bool(output_should_stop) and (CS.standstill or CS.vEgo <= 0.75):
+    return True, min(float(output_a_target), 0.0)
+  return bool(output_should_stop), output_a_target
+
 def get_cruise_accel(e2e, v_cruise, v_ego, a_cruise_prev, angle_steers, CP, dt, accel_coast, allow_throttle):
   max_accel = ACCEL_MAX if e2e else get_max_accel(v_ego)
 
@@ -247,6 +262,8 @@ class LongitudinalPlanner(LongitudinalPlannerIQ):
     self.output_should_stop = any(should_stop for _, _, should_stop in candidates)
 
     self.output_should_stop = self.output_should_stop or self.forcing_stop
+    self.output_should_stop, output_a_target = apply_follow_standstill_hold(
+      sm['carState'], sm, output_a_target, self.output_should_stop)
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
 
     self.a_desired = float(self.output_a_target)
