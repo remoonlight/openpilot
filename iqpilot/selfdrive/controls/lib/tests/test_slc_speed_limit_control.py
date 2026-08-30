@@ -663,3 +663,51 @@ def test_construction_zone_fires_event_once_per_zone_entry():
   assert event not in controller.pending_events
   controller.update_limits(0.0, None, True, 33.0, 30.0, _construction_sm(), slc_params)
   assert event in controller.pending_events
+
+
+@pytest.mark.parametrize("alive,valid,limit_valid,limit", [
+  (False, True, True, 25.0), (True, False, True, 25.0), (True, True, False, 25.0),
+  (True, True, True, 0.0), (True, True, True, float("nan")), (True, True, True, float("inf")),
+])
+def test_navigation_mapbox_limit_requires_fresh_valid_data(alive, valid, limit_valid, limit):
+  controller = _construction_controller()
+  controller.get_tomtom_speed_limit = lambda *_args: None
+  controller.mapbox_limit = 20.0
+  sm = _FakeSM(_build_sm())
+  sm["iqNavState"] = custom.IQNavState.new_message(mapboxSpeedLimit=limit, mapboxSpeedLimitValid=limit_valid)
+  sm.alive["iqNavState"] = alive
+  sm.valid = {"iqNavState": valid}
+  controller.update_limits(0, datetime.now(), True, 30, 20, sm, _base_slc_params_controller())
+  assert controller.target == pytest.approx(20.0)
+  assert controller.source == "Mapbox"
+
+
+@pytest.mark.parametrize("policy,expected", [(0, 0.0), (1, 25.0), (2, 25.0)])
+@pytest.mark.parametrize("online_filler", [False, True])
+def test_navigation_mapbox_only_limit_obeys_slc_policy(policy, expected, online_filler):
+  controller = _construction_controller()
+  controller.get_tomtom_speed_limit = lambda *_args: None
+  sm = _FakeSM(_build_sm())
+  sm["iqNavState"] = custom.IQNavState.new_message(mapboxSpeedLimit=25.0, mapboxSpeedLimitValid=True)
+  sm.alive["iqNavState"] = True
+  sm.valid = {"iqNavState": True}
+  params = _base_slc_params_controller() | {"slc_policy": policy, "slc_online_filler": online_filler}
+  controller.update_limits(0, datetime.now(), True, 30, 20, sm, params)
+  assert controller.target == pytest.approx(expected)
+
+
+def test_navigation_mapbox_limit_requires_confirmation_before_override(set_speed_slc):
+  system = set_speed_slc
+  system.params["speed_limit_confirmation_higher"] = True
+  system.slc.slc._resolver.map_speed_limit = 0
+  system.sm["iqNavState"] = custom.IQNavState.new_message(mapboxSpeedLimit=60 * system.unit, mapboxSpeedLimitValid=True)
+  system.sm.alive["iqNavState"] = True
+  system.sm.valid = {"iqNavState": True}
+  system.step(50, new_gesture=True)
+  assert system.slc.assist_state == custom.IQPlan.SpeedLimit.AssistState.preActive
+  assert system.step(70, increase=True) == pytest.approx(50)
+  system.sm["carState"].buttonEvents = [car.CarState.ButtonEvent(type="accelCruise", pressed=False)]
+  assert system.step(71, increase=True) == pytest.approx(60)
+  system.sm["carState"].buttonEvents = []
+  assert system.step(72, increase=True) == pytest.approx(60)
+  assert system.step(73, increase=True, new_gesture=True) == pytest.approx(73)

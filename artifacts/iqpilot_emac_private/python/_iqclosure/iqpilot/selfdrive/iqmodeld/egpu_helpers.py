@@ -57,6 +57,11 @@ def egpu_pkl_path(meta: dict) -> str:
   return os.path.join(Paths.model_root(), f"egpu_{meta['key']}_{meta['sha256'][:8]}_amd_tinygrad.pkl")
 
 
+def egpu_policy_pkl_path(meta: dict) -> str:
+  from iqpilot.system.hardware.hw import Paths
+  return os.path.join(Paths.model_root(), f"egpu_{meta['key']}_{meta['sha256'][:8]}_amd_policy.pkl")
+
+
 def onnx_cache_path(meta: dict) -> str:
   from iqpilot.system.hardware.hw import Paths
   return os.path.join(Paths.model_root(), f"{meta['model_name']}_{meta['sha256'][:8]}.onnx")
@@ -135,6 +140,15 @@ def download_onnx(meta: dict, progress_cb=None) -> str:
     raise RuntimeError(f"onnx sha256 mismatch for {meta['key']}")
   os.replace(tmp, path)
   return path
+
+
+def download_precompiled(meta: dict, progress_cb=None, policy: bool = False) -> str | None:
+  art = meta.get("egpu_policy_artifact" if policy else "egpu_artifact")
+  if not art or not art.get("objects"):
+    return None
+  from iqpilot.selfdrive.iqmodeld.model_bundle_downloader import download_lfs_bundle
+  dest = egpu_policy_pkl_path(meta) if policy else egpu_pkl_path(meta)
+  return download_lfs_bundle(art["objects"], dest, art["sha256"], int(art.get("size", 0)), progress_cb=progress_cb)
 
 
 def patch_tinygrad_fetch_fw() -> None:

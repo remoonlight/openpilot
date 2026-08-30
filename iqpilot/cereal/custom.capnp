@@ -599,6 +599,8 @@ struct IQNavState @0xaae9afb364368cd9 {
   cameraChime @59 :Bool;
   cameraTrusted @60 :Bool;
   cameraSourceAge @61 :Float32;
+  mapboxSpeedLimit @62 :Float32;
+  mapboxSpeedLimitValid @63 :Bool;
 
   enum CameraType {
     none @0;

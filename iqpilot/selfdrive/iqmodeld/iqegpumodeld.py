@@ -38,8 +38,8 @@ from iqpilot.selfdrive.iqmodeld.driving_action import (
   DESIRE_LEN, LAT_SMOOTH_SECONDS, LONG_SMOOTH_SECONDS, get_action_from_model,
 )
 from iqpilot.selfdrive.iqmodeld.egpu_helpers import (
-  download_onnx, egpu_pkl_path, egpu_present_consented, egpu_selected, local_onnx, patch_tinygrad_fetch_fw,
-  quarantine_artifact, resolve_backend, usbgpu_present,
+  download_onnx, download_precompiled, egpu_pkl_path, egpu_policy_pkl_path, egpu_present_consented, egpu_selected, local_onnx,
+  patch_tinygrad_fetch_fw, quarantine_artifact, resolve_backend, usbgpu_present,
 )
 from iqpilot.selfdrive.iqmodeld.egpu_model import resolve_egpu_model
 from iqpilot.selfdrive.iqmodeld.egpu_pipeline import EgpuPipeline, EgpuPipelineError, make_big_channel_payload
@@ -47,6 +47,7 @@ from iqpilot.selfdrive.iqmodeld.egpu_telemetry import EgpuDockTelemetry
 from iqpilot.selfdrive.iqmodeld.messaging import DrivePacketMemory, populate_drive_messages, populate_odometry_message
 from iqpilot.selfdrive.iqmodeld.metadata import Meta20hz
 from iqpilot.selfdrive.iqmodeld.model_channel import BIG_CHANNEL, ModelChannel
+from iqpilot.selfdrive.iqmodeld.egpu_policy import POLICY_FORMAT, PolicyRunner
 from iqpilot.selfdrive.iqmodeld.model_warp import FrameWarp
 from iqpilot.selfdrive.iqmodeld.parser import PhaseParser
 
@@ -89,9 +90,10 @@ def _wait_for_egpu(params: Params) -> None:
 
 def _compile_in_subprocess(meta: dict, onnx_path: str, pkl_path: str) -> None:
   cmd = [sys.executable, "-m", "iqpilot.selfdrive.iqmodeld.tools.compile_egpu_model",
-         "--model", meta["key"], "--onnx", onnx_path, "--output", pkl_path]
+         "--model", meta["key"], "--onnx", onnx_path, "--output", pkl_path,
+         "--progress-param", "UsbGpuSetupProgress", "--progress-base", "0.5", "--progress-span", "0.48"]
   compile_env = {**os.environ, "DEV": "USB+AMD:LLVM", "FLOAT16": "1",
-                 "JIT_BATCH_SIZE": "0", "GMMU": "0"}
+                 "JIT_BATCH_SIZE": "0", "GMMU": "0", "TC_OPT": "2"}
   proc = subprocess.run(cmd, timeout=COMPILE_TIMEOUT_S, capture_output=True, text=True,
                         env=compile_env, preexec_fn=lambda: os.nice(20))
   if proc.returncode != 0:
@@ -99,12 +101,43 @@ def _compile_in_subprocess(meta: dict, onnx_path: str, pkl_path: str) -> None:
     raise RuntimeError(f"eGPU model compile failed (rc={proc.returncode}): {tail}")
 
 
+_precompiled_tried = False
+
+
 def _ensure_artifact(params: Params, meta: dict) -> str:
-  pkl_path = egpu_pkl_path(meta)
-  if os.path.isfile(pkl_path):
-    return pkl_path
+  global _precompiled_tried
+  policy_path = egpu_policy_pkl_path(meta)
+  if os.path.isfile(policy_path):
+    return policy_path
+  legacy_path = egpu_pkl_path(meta)
 
   params.put_bool("UsbGpuCompiled", False)
+  params.put_bool("UsbGpuReady", False)
+
+  if meta.get("egpu_policy_artifact") and not _precompiled_tried:
+    _precompiled_tried = True
+    params.put("UsbGpuSetupProgress", "0.0")
+    dl_last = [-1.0]
+
+    def _dl_prog(p: float) -> None:
+      if p - dl_last[0] >= 0.02 or p >= 1.0:
+        dl_last[0] = p
+        params.put("UsbGpuSetupProgress", f"{p:.3f}")
+
+    try:
+      cloudlog.warning(f"iqegpumodeld downloading precompiled {meta['key']} policy "
+                       f"({int(meta['egpu_policy_artifact'].get('size', 0)) / 1e6:.0f}MB)")
+      precompiled = download_precompiled(meta, progress_cb=_dl_prog, policy=True)
+      if precompiled is not None:
+        cloudlog.warning(f"iqegpumodeld precompiled ready -> {precompiled}")
+        return precompiled
+    except Exception as e:
+      cloudlog.warning(f"iqegpumodeld precompiled policy unavailable ({e}); falling back")
+
+  if os.path.isfile(legacy_path):
+    cloudlog.warning(f"iqegpumodeld using legacy per-tensor artifact {legacy_path}; policy artifact not hosted yet")
+    return legacy_path
+
   onnx_path = local_onnx(meta)
   if onnx_path is None:
     params.put("UsbGpuSetupProgress", "0.0")
@@ -114,14 +147,14 @@ def _ensure_artifact(params: Params, meta: dict) -> str:
     def _prog(p: float) -> None:
       if p - last[0] >= 0.02 or p >= 1.0:
         last[0] = p
-        params.put("UsbGpuSetupProgress", f"{p:.3f}")
+        params.put("UsbGpuSetupProgress", f"{p * 0.5:.3f}")
 
     onnx_path = download_onnx(meta, progress_cb=_prog)
 
   cloudlog.warning(f"iqegpumodeld compiling {meta['key']} for USB-AMD (one-time, can take minutes)")
-  _compile_in_subprocess(meta, onnx_path, pkl_path)
-  cloudlog.warning(f"iqegpumodeld compiled -> {pkl_path}")
-  return pkl_path
+  _compile_in_subprocess(meta, onnx_path, policy_path)
+  cloudlog.warning(f"iqegpumodeld compiled -> {policy_path}")
+  return policy_path
 
 
 def _load_infer_fn(pkl_path: str, meta: dict):
@@ -136,6 +169,10 @@ def _load_infer_fn(pkl_path: str, meta: dict):
   if int(bundle.get("output_len", -1)) != int(meta["output_len"]):
     quarantine_artifact(pkl_path, "pkl output_len mismatch")
     raise RuntimeError(f"artifact output_len {bundle.get('output_len')} != {meta['output_len']}")
+  if bundle.get("format") == POLICY_FORMAT:
+    runner = PolicyRunner(bundle["run_policy"], bundle["input_spec"], int(bundle["frame_skip"]),
+                          meta["output_slices"]["hidden_state"], bundle.get("input_device", "AMD"))
+    return runner, bundle["input_spec"]
   jit = bundle["run_model"]
   input_dev = bundle.get("input_device", "AMD")
   input_spec = bundle["input_spec"]
@@ -152,7 +189,12 @@ def _load_infer_fn(pkl_path: str, meta: dict):
 def _warmup(infer_fn, input_spec: dict, output_len: int) -> float:
   zeros = {name: np.zeros(shape, dtype=dtype) for name, (shape, dtype) in input_spec.items()}
   t0 = time.perf_counter()
-  out = infer_fn(zeros)
+  if isinstance(infer_fn, PolicyRunner):
+    img = input_spec["img"][0]
+    out = infer_fn.run(np.zeros((2, 6, img[2], img[3]), dtype=np.uint8), np.zeros(input_spec["desire_pulse"][0][2], dtype=np.float32),
+                       np.zeros(2, dtype=np.float32), np.zeros(2, dtype=np.float32))
+  else:
+    out = infer_fn(zeros)
   dt = time.perf_counter() - t0
   if out.shape[0] != output_len or not np.isfinite(out).all():
     raise RuntimeError(f"warmup produced invalid output (len={out.shape[0]})")
@@ -207,6 +249,7 @@ def main(demo: bool = False) -> None:
 
   params.put_bool("UsbGpuLoading", False)
   params.put_bool("UsbGpuCompiled", True)
+  params.put_bool("UsbGpuReady", True)
   params.put("UsbGpuSetupProgress", "1.0")
   cloudlog.warning(f"iqegpumodeld model: {meta['key']} ({meta['model_name']})")
   cloudlog.warning(f"iqegpumodeld model up (warmup {warm_s * 1e3:.0f}ms)")

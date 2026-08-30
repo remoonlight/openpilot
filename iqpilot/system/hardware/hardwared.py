@@ -427,6 +427,8 @@ def hardware_thread(end_event, hw_queue) -> None:
 
       # Set ignition based on any panda connected
       onroad_conditions["ignition"] = any(ps.ignitionLine or ps.ignitionCan for ps in pandaStates if ps.pandaType != log.PandaState.PandaType.unknown)
+      if params.get_bool("IQBenchIgnition"):
+        onroad_conditions["ignition"] = True
 
       pandaState = pandaStates[0]
 
@@ -498,7 +500,7 @@ def hardware_thread(end_event, hw_queue) -> None:
     egpu_valid = sm.alive["egpuDockState"] and sm.valid["egpuDockState"]
     egpu_dock_status.update(started_ts is None, last_hw_state.usb_state, egpu_dock_flasher.failed,
                             params.get_bool("UsbGpuLoading"), params.get("UsbGpuActive"),
-                            params.get_bool("UsbGpuCompiled"),
+                            params.get_bool("UsbGpuReady"),
                             sm["egpuDockState"] if egpu_valid else None, set_offroad_alert_if_changed)
 
     msg.deviceState.screenBrightnessPercent = HARDWARE.get_screen_brightness()

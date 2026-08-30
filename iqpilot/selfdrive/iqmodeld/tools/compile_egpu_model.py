@@ -4,6 +4,7 @@ Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed 
 from __future__ import annotations
 
 import argparse
+import gc
 import os
 import pickle
 import time
@@ -12,6 +13,7 @@ os.environ.setdefault("DEV", "USB+AMD:LLVM")
 os.environ.setdefault("FLOAT16", "1")
 os.environ.setdefault("JIT_BATCH_SIZE", "0")
 os.environ.setdefault("GMMU", "0")
+os.environ.setdefault("TC_OPT", "2")
 
 import numpy as np
 
@@ -24,6 +26,22 @@ INPUT_SPEC = dict(MODEL_INPUT_SPEC)
 patch_tinygrad_fetch_fw()
 
 SEED = 42
+KERNEL_PROGRESS_SCALE = 260.0
+
+
+def _progress_sampler(param: str, base: float, span: float, stop) -> None:
+  import math
+
+  from iqpilot.common.params import Params
+  from tinygrad.helpers import GlobalCounters
+  pm = Params()
+  last = -1.0
+  while not stop.wait(0.5):
+    kernels = float(getattr(GlobalCounters, "kernel_count", 0))
+    value = base + span * (1.0 - math.exp(-kernels / KERNEL_PROGRESS_SCALE))
+    if value - last >= 0.01:
+      last = value
+      pm.put(param, f"{min(base + span, value):.3f}")
 
 
 def set_input_spec(meta: dict) -> None:
@@ -81,8 +99,27 @@ def compile_model(meta: dict, onnx_path: str, out_path: str) -> str:
   if not np.isfinite(baseline).all():
     raise RuntimeError("compiled model produced non-finite outputs")
 
-  print("pickle round trip")
-  jit = pickle.loads(pickle.dumps(jit))
+  bundle = {
+    "run_model": jit,
+    "model_key": meta["key"],
+    "model_sha256": meta["sha256"],
+    "output_len": int(meta["output_len"]),
+    "frame_skip": int(meta["frame_skip"]),
+    "input_spec": {name: (tuple(shape), dtype) for name, (shape, dtype) in INPUT_SPEC.items()},
+    "input_device": Device.DEFAULT,
+  }
+  os.makedirs(os.path.dirname(out_path), exist_ok=True)
+  tmp = out_path + ".part"
+  print("serialize")
+  with open(tmp, "wb") as f:
+    pickle.dump(bundle, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+  del bundle, jit
+  gc.collect()
+
+  print("reload + validate")
+  with open(tmp, "rb") as f:
+    jit = pickle.load(f)["run_model"]
   if not np.array_equal(_run(jit, SEED), baseline):
     raise RuntimeError("outputs differ from baseline after pickle round trip")
   if np.array_equal(_run(jit, SEED + 1), baseline):
@@ -96,19 +133,94 @@ def compile_model(meta: dict, onnx_path: str, out_path: str) -> str:
   from iqpilot.selfdrive.iqmodeld.tools.compile_supercombo import _slice_outputs, _validate_pose_outputs
   _validate_pose_outputs(PhaseParser().parse_vision_outputs(_slice_outputs(flat, meta["output_slices"])))
 
+  os.replace(tmp, out_path)
+  return out_path
+
+
+def _policy_frame(seed: int, input_spec: dict):
+  from tinygrad.tensor import Tensor
+  rng = np.random.default_rng(seed)
+  img = input_spec["img"][0]
+  warped = Tensor(rng.integers(0, 256, (2, 6, img[2], img[3])).astype(np.uint8), device="NPY").realize()
+  return warped
+
+
+def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
+  from tinygrad.device import Device
+  from tinygrad.engine.jit import TinyJit
+  from tinygrad.nn.onnx import OnnxRunner
+
+  from iqpilot.selfdrive.iqmodeld.egpu_policy import POLICY_FORMAT, PackedInputs, make_queues, make_run_policy
+
+  if meta.get("split"):
+    raise RuntimeError(f"model {meta['key']} is a split model; eGPU compiles fused models only")
+  input_spec = {name: (tuple(shape), dtype) for name, (shape, dtype) in INPUT_SPEC.items()}
+  frame_skip = int(meta["frame_skip"])
+  device = Device.DEFAULT
+  jit = TinyJit(make_run_policy(OnnxRunner(onnx_path), input_spec, frame_skip, device), prune=True)
+  queues = make_queues(input_spec, frame_skip, device)
+  packed = PackedInputs(input_spec)
+
+  def step(seed: int) -> np.ndarray:
+    packed.views["traffic_convention"][:] = [1, 0]
+    packed.views["action_t"][:] = [0.2, 0.3]
+    st = time.perf_counter()
+    out, = jit(warped=_policy_frame(seed, input_spec), packed_npy_inputs=packed.tensor, **queues)
+    flat = out.numpy().reshape(-1)
+    print(f"  policy step(seed={seed}) {(time.perf_counter() - st) * 1e3:6.1f} ms")
+    packed.views["prev_feat"][:] = flat[meta["output_slices"]["hidden_state"]].reshape(packed.views["prev_feat"].shape)
+    return flat
+
+  print("capture + replay")
+  for i in range(3):
+    baseline = step(SEED + i)
+  if baseline.shape[0] != meta["output_len"]:
+    raise RuntimeError(f"model output length {baseline.shape[0]} != registry {meta['output_len']}")
+  if not np.isfinite(baseline).all():
+    raise RuntimeError("compiled policy produced non-finite outputs")
+
   bundle = {
-    "run_model": jit,
+    "format": POLICY_FORMAT,
+    "run_policy": jit,
     "model_key": meta["key"],
     "model_sha256": meta["sha256"],
     "output_len": int(meta["output_len"]),
-    "frame_skip": int(meta["frame_skip"]),
-    "input_spec": {name: (tuple(shape), dtype) for name, (shape, dtype) in INPUT_SPEC.items()},
-    "input_device": Device.DEFAULT,
+    "frame_skip": frame_skip,
+    "input_spec": input_spec,
+    "input_device": device,
   }
   os.makedirs(os.path.dirname(out_path), exist_ok=True)
   tmp = out_path + ".part"
+  print("serialize")
   with open(tmp, "wb") as f:
     pickle.dump(bundle, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+  del bundle, jit, queues, packed
+  gc.collect()
+
+  print("reload + validate")
+  with open(tmp, "rb") as f:
+    jit = pickle.load(f)["run_policy"]
+  queues = make_queues(input_spec, frame_skip, device)
+  packed = PackedInputs(input_spec)
+  outs = []
+  for i in range(3):
+    packed.views["traffic_convention"][:] = [1, 0]
+    packed.views["action_t"][:] = [0.2, 0.3]
+    out, = jit(warped=_policy_frame(SEED + i, input_spec), packed_npy_inputs=packed.tensor, **queues)
+    flat = out.numpy().reshape(-1)
+    packed.views["prev_feat"][:] = flat[meta["output_slices"]["hidden_state"]].reshape(packed.views["prev_feat"].shape)
+    outs.append(flat)
+  if not np.array_equal(outs[-1], baseline):
+    raise RuntimeError("policy outputs differ from baseline after pickle round trip")
+  if np.array_equal(outs[0], outs[-1]):
+    raise RuntimeError("policy outputs insensitive to inputs after pickle round trip")
+  if not all(np.isfinite(o).all() for o in outs):
+    raise RuntimeError("reloaded policy produced non-finite outputs")
+  from iqpilot.selfdrive.iqmodeld.parser import PhaseParser
+  from iqpilot.selfdrive.iqmodeld.tools.compile_supercombo import _slice_outputs, _validate_pose_outputs
+  _validate_pose_outputs(PhaseParser().parse_vision_outputs(_slice_outputs(outs[-1], meta["output_slices"])))
+
   os.replace(tmp, out_path)
   return out_path
 
@@ -118,6 +230,10 @@ def main() -> None:
   p.add_argument("--model", default=None, help=f"registry key, one of {sorted(EGPU_MODELS)}")
   p.add_argument("--onnx", default=None)
   p.add_argument("--output", default=None)
+  p.add_argument("--progress-param", default=None)
+  p.add_argument("--progress-base", type=float, default=None)
+  p.add_argument("--progress-span", type=float, default=0.0)
+  p.add_argument("--format", type=int, default=2, choices=(1, 2))
   args = p.parse_args()
 
   if args.model is not None:
@@ -136,7 +252,23 @@ def main() -> None:
   if onnx_path is None or not os.path.isfile(onnx_path):
     raise SystemExit(f"onnx not found for {meta['key']}; pass --onnx or let iqegpumodeld download it first")
 
-  out = compile_model(meta, onnx_path, args.output or egpu_pkl_path(meta))
+  stop = None
+  sampler = None
+  if args.progress_param and args.progress_base is not None:
+    import threading
+    stop = threading.Event()
+    sampler = threading.Thread(target=_progress_sampler,
+                               args=(args.progress_param, args.progress_base, args.progress_span, stop),
+                               daemon=True)
+    sampler.start()
+  try:
+    build = compile_policy_model if args.format == 2 else compile_model
+    out = build(meta, onnx_path, args.output or egpu_pkl_path(meta))
+  finally:
+    if stop is not None:
+      stop.set()
+    if sampler is not None:
+      sampler.join(timeout=2)
   print(f"saved eGPU jit to {out} ({os.path.getsize(out) / 1e6:.2f} MB)")
 
 

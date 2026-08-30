@@ -34,6 +34,7 @@
   "iqpilot.selfdrive.iqmodeld.emac_model_meta",
   "iqpilot.selfdrive.iqmodeld.messaging",
   "iqpilot.selfdrive.iqmodeld.metadata",
+  "iqpilot.selfdrive.iqmodeld.model_bundle_downloader",
   "iqpilot.selfdrive.iqmodeld.model_channel",
   "iqpilot.selfdrive.iqmodeld.model_warp",
   "iqpilot.selfdrive.iqmodeld.models",

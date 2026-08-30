@@ -207,10 +207,20 @@ def _patch_mock_state():
     activeBundle = _MockBundle()
     selectedBundle = None   # None = not downloading
 
+  from iqpilot.cereal import log as _log
+  class _MockDeviceState:
+    networkType = _log.DeviceState.NetworkType.wifi
+    networkStrength = type("NS", (), {"raw": 3})()
+    egpuDockPresent = True
+    started = False
+    freeSpacePercent = 50.0
+    memoryUsagePercent = 40
+
   class _MockSM:
     """Minimal SubMaster-like dict that returns sensible defaults."""
     _data = {
       "iqModelManager": _MockModelManager(),
+      "deviceState": _MockDeviceState(),
     }
     def __getitem__(self, key):
       return self._data.get(key, type("Empty", (), {"enabled": False})())
@@ -330,6 +340,16 @@ def load_panel(name: str):
     widget = cls()
   widget.set_rect(rect)
   widget.show_event()
+
+  eg = os.environ.get("IQ_EGPU_STATE")
+  mc = os.environ.get("IQ_MAC_STATE")
+  if (eg or mc) and hasattr(widget, "_egpu_state"):
+    widget._egpu_state = eg or None
+    widget._mac_state = mc or None
+    widget._egpu_progress = float(os.environ.get("IQ_EGPU_PROGRESS", "0") or 0)
+    widget._mac_progress = float(os.environ.get("IQ_MAC_PROGRESS", "0") or 0)
+    widget._update_dock_status = lambda: None
+
   return widget
 
 

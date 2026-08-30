@@ -104,6 +104,16 @@ class MiciHomeLayout(Widget):
     self._iqstandard_txt = gui_app.texture("icons_mici/iqstandard_mode_mici.png", 48, 48)
     self._mode_txt = None
     self._mic_txt = gui_app.texture("icons_mici/microphone.png", 32, 46)
+    self._egpu_txt = gui_app.texture("icons_mici/egpu.png", 62, 46)
+    self._egpu_green_txt = gui_app.texture("icons_mici/egpu_green.png", 62, 46)
+    self._egpu_orange_txt = gui_app.texture("icons_mici/egpu_orange.png", 78, 46)
+    self._mac_txt = gui_app.texture("icons_mici/mac.png", 62, 46)
+    self._mac_green_txt = gui_app.texture("icons_mici/mac_green.png", 62, 46)
+    self._mac_orange_txt = gui_app.texture("icons_mici/mac_orange.png", 78, 46)
+    self._egpu_state: str | None = None
+    self._mac_state: str | None = None
+    self._egpu_progress = 0.0
+    self._mac_progress = 0.0
 
     self._net_type = NETWORK_TYPES.get(NetworkType.none)
     self._net_strength = 0
@@ -176,6 +186,37 @@ class MiciHomeLayout(Widget):
       self._version_text = self._get_version_text()
       self._last_refresh = rl.get_time()
       self._update_params()
+      self._update_dock_status()
+
+  def _update_dock_status(self):
+    p = ui_state.params
+    egpu_present = bool(getattr(ui_state.sm['deviceState'], "egpuDockPresent", False))
+    if not egpu_present:
+      self._egpu_state = None
+    elif any(p.get_bool(k) for k in ("Offroad_EgpuPcieUnavailable", "Offroad_EgpuOverheated",
+                                     "Offroad_EgpuFansObstructed", "Offroad_EgpuUpdateFailed",
+                                     "Offroad_EgpuNotDetected")):
+      self._egpu_state = "orange"
+    elif p.get_bool("UsbGpuLoading") and not p.get_bool("UsbGpuCompiled"):
+      self._egpu_state = "compiling"
+      try:
+        self._egpu_progress = max(0.0, min(1.0, float(p.get("UsbGpuSetupProgress") or 0.0)))
+      except (TypeError, ValueError):
+        self._egpu_progress = 0.0
+    elif p.get_bool("Offroad_EgpuUsbSlow") or p.get_bool("Offroad_EgpuUncompiled"):
+      self._egpu_state = "grey"
+    else:
+      self._egpu_state = "green"
+
+    mac_present = p.get_bool("MacModelPresent") or p.get_bool("MacModelReachable")
+    if not mac_present:
+      self._mac_state = None
+    elif p.get_bool("MacModelFault"):
+      self._mac_state = "orange"
+    elif p.get_bool("MacModelReady") or p.get_bool("MacModelActive"):
+      self._mac_state = "green"
+    else:
+      self._mac_state = "grey"
 
   def _update_network_status(self, device_state):
     self._net_type = device_state.networkType
@@ -329,6 +370,33 @@ class MiciHomeLayout(Widget):
       rl.draw_texture(self._mic_txt, int(last_x),
                       int(self._rect.y + self.rect.height - self._mic_txt.height / 2 - Y_CENTER), rl.Color(255, 255, 255, 255))
       last_x += self._mic_txt.width + ITEM_SPACING
+
+    for state, base, green, orange, progress in (
+      (self._egpu_state, self._egpu_txt, self._egpu_green_txt, self._egpu_orange_txt, self._egpu_progress),
+      (self._mac_state, self._mac_txt, self._mac_green_txt, self._mac_orange_txt, self._mac_progress)):
+      if state is None:
+        continue
+      y_top = int(self._rect.y + self.rect.height - base.height / 2 - Y_CENTER)
+      if state == "compiling":
+        self._draw_compile_gauge(int(last_x), y_top, base, green, progress)
+        last_x += base.width + ITEM_SPACING
+        continue
+      if state == "green":
+        tex, tint = green, rl.Color(255, 255, 255, 255)
+      elif state == "orange":
+        tex, tint = orange, rl.Color(255, 255, 255, 255)
+      else:
+        tex, tint = base, rl.Color(165, 165, 170, 235)
+      rl.draw_texture(tex, int(last_x), y_top, tint)
+      last_x += tex.width + ITEM_SPACING
+
+  def _draw_compile_gauge(self, x: int, y_top: int, base, fill, progress: float):
+    rl.draw_texture(base, x, y_top, rl.Color(165, 165, 170, 235))
+    fill_h = int(base.height * max(0.0, min(1.0, progress)))
+    if fill_h > 0:
+      rl.begin_scissor_mode(x, y_top + base.height - fill_h, base.width, fill_h)
+      rl.draw_texture(fill, x, y_top, rl.Color(255, 255, 255, 255))
+      rl.end_scissor_mode()
 
   def _draw_cellular_cluster(self, start_x: float, spacing: int, y_center: int, connected: bool) -> float:
     draw_net_txt = {0: self._cell_none_txt,

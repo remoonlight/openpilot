@@ -4,6 +4,7 @@ Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed 
 
 import os
 import re
+import threading
 import time
 
 import pyray as rl
@@ -36,6 +37,31 @@ _RUNNER_CACHE_KEY = "ModelRunnerTypeCache"
 
 def _display_model_name(bundle) -> str:
   return bundle.internalName if getattr(bundle, "internalName", "") else bundle.displayName
+
+
+def _big_options() -> list[tuple[str, str]]:
+  try:
+    from iqpilot.selfdrive.iqmodeld.emac_model_meta import big_models
+    return big_models(ui_state.params)
+  except Exception:
+    return []
+
+
+def _big_label(key: str) -> str:
+  for name, display in _big_options():
+    if name == key:
+      return display
+  return key or "lebrowski"
+
+
+def _refresh_big_catalog() -> None:
+  def worker():
+    try:
+      from iqpilot.selfdrive.iqmodeld.emac_model_meta import refresh_catalog
+      refresh_catalog(ui_state.params)
+    except Exception:
+      pass
+  threading.Thread(target=worker, daemon=True).start()
 
 
 class _ModelSelectPanel(NavScroller):
@@ -99,6 +125,9 @@ class ModelsLayoutMici(NavScroller):
     self._current = BigButton(tr("active model"))
     self._current.set_click_callback(self._show_folders)
 
+    self._big = BigButton(tr("big model"))
+    self._big.set_click_callback(self._show_big_models)
+
     self._cancel = BigButton(tr("stop download"))
     self._cancel.set_click_callback(self._cancel_model_request)
     self._cancel.set_visible(self._is_downloading)
@@ -129,7 +158,7 @@ class ModelsLayoutMici(NavScroller):
     self._lane_speed = MappedParamToggle(tr("lane turn speed"), "IQLaneTurnValue", [tr("slow"), tr("normal"), tr("fast")], _LANE_TURN_VALUES)
     self._lane_speed.set_visible(lambda: self._lane_turn._checked)
 
-    self._main_items = [self._current, self._cancel, self._supercombo, self._vision, self._policy, self._redownload, self._refresh, self._clear,
+    self._main_items = [self._current, self._big, self._cancel, self._supercombo, self._vision, self._policy, self._redownload, self._refresh, self._clear,
                         self._steer_delay, self._sw_delay, self._lane_turn, self._lane_speed]
     self._scroller.add_widgets(self._main_items)
 
@@ -326,6 +355,55 @@ class ModelsLayoutMici(NavScroller):
     btns = [_ModelButton(b, self._select_model, self._toggle_favorite, b.ref in favorites) for b in bundles]
     gui_app.push_widget(_ModelSelectPanel(btns))
 
+  def _show_big_models(self):
+    options = _big_options()
+    if len(options) <= 1:
+      _refresh_big_catalog()
+    off = BigButton(tr("Off"))
+    off.set_click_callback(lambda: self._select_big(None))
+    btns = [off]
+    for key, display in options:
+      btn = BigButton(display)
+      btn.set_click_callback(lambda k=key: self._select_big(k))
+      btns.append(btn)
+    gui_app.push_widget(_ModelSelectPanel(btns))
+
+  def _select_big(self, key):
+    if key is None:
+      ui_state.params.put_bool("IQEmacEnabled", False)
+    else:
+      ui_state.params.put("IQEmacModel", key)
+      ui_state.params.put_bool("IQEmacEnabled", True)
+    gui_app.pop_widgets_to(self)
+
+  def _big_setup_progress(self) -> float | None:
+    p = ui_state.params
+    if p.get_bool("IQEmacEnabled"):
+      raw = p.get("MacModelDownloadProgress")
+      loading = not p.get_bool("MacModelReady")
+    else:
+      raw = p.get("UsbGpuSetupProgress")
+      loading = p.get_bool("UsbGpuLoading") and not p.get_bool("UsbGpuCompiled")
+    if not loading:
+      return None
+    try:
+      return max(0.0, min(1.0, float(raw)))
+    except (TypeError, ValueError):
+      return None
+
+  def _big_model_value(self) -> str:
+    p = ui_state.params
+    dock = bool(getattr(ui_state.sm["deviceState"], "egpuDockPresent", False))
+    if not p.get_bool("IQEmacEnabled") and not dock:
+      return tr("Off")
+    key = p.get("IQEmacModel")
+    key = key.decode() if isinstance(key, bytes) else (key or "")
+    label = _big_label(key)
+    progress = self._big_setup_progress()
+    if progress is not None and progress < 1.0:
+      return f"{label} {int(progress * 100)}%"
+    return label
+
   def _generation_changed(self, bundle) -> bool:
     try:
       active = self.model_manager.activeBundle
@@ -360,6 +438,7 @@ class ModelsLayoutMici(NavScroller):
     self._handle_bundle_download_progress()
     self._current.set_value(self._current_model_value())
     self._current.set_enabled(ui_state.is_offroad())
+    self._big.set_value(self._big_model_value())
     target = self._redownload_target_bundle()
     self._redownload.set_value(_display_model_name(target) if target else "")
 

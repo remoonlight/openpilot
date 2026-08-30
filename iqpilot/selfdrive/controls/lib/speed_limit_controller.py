@@ -777,7 +777,15 @@ class SpeedLimitController:
       self.segment_distance = 0.0
       self.tomtom_segment_distance = 0.0
 
-    online_limit = self.tomtom_limit if self.tomtom_limit > 0 else self.mapbox_limit
+    nav_mapbox_limit = 0.0
+    if getattr(sm, "alive", {}).get("iqNavState", False) and getattr(sm, "valid", {}).get("iqNavState", False):
+      nav_state = sm["iqNavState"]
+      if getattr(nav_state, "mapboxSpeedLimitValid", False):
+        candidate = float(getattr(nav_state, "mapboxSpeedLimit", 0.0))
+        if math.isfinite(candidate) and candidate >= LIMIT_MIN_SPEED:
+          nav_mapbox_limit = candidate
+    mapbox_limit = nav_mapbox_limit if nav_mapbox_limit > 0 else self.mapbox_limit
+    online_limit = self.tomtom_limit if self.tomtom_limit > 0 else mapbox_limit
 
     dashboard_limit = float(dashboard_speed_limit) if dashboard_speed_limit else 0.0
     resolved_limit, resolved_source = self._resolver.resolve(dashboard_limit, online_limit, slc_params)
