@@ -162,6 +162,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // --- iqpilot params --- //
     {"ApiCache_DriveStats", {PERSISTENT, JSON}},
     {"WideCamFaulty", {CLEAR_ON_MANAGER_START, BOOL}},
+    {"IQEdgeGuard", {PERSISTENT, BOOL, "0"}},
     {"IQLaneChangeBsmDelay", {PERSISTENT, BOOL, "0"}},
     {"IQLaneChangeTimer", {PERSISTENT, INT, "0"}},
     {"NavExitLaneChange", {PERSISTENT, BOOL, "0"}},
@@ -294,7 +295,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"HyundaiCameraSCC", {PERSISTENT, INT, "0"}},
     {"IsLdwsCar", {PERSISTENT, INT, "0"}},
     {"LaneLineCheck", {PERSISTENT, INT, "0"}},
-    {"LongitudinalPersonalityMax", {PERSISTENT, INT, "3"}},
+    {"LongitudinalPersonalityMax", {PERSISTENT, INT, "2"}},
     {"MaxAngleFrames", {PERSISTENT, INT, "89"}},
     {"SpeedFromPCM", {PERSISTENT, INT, "2"}},
     {"IQSubaruCreepAssist", {PERSISTENT, BOOL, "0"}},

@@ -144,6 +144,7 @@ def _patch_mock_state():
   mp.put("NeuralNetworkFeedForward",  False)
   mp.put("IQLaneChangeTimer",       0)      # nudge
   mp.put("IQLaneChangeBsmDelay",    False)
+  mp.put("IQEdgeGuard",             False)
 
   # ── Visuals (correct param keys matching visuals.py) ─────────────────────
   mp.put("IQBlindSpotAlerts",             True)
@@ -173,7 +174,7 @@ def _patch_mock_state():
   # ── Cruise ────────────────────────────────────────────────────────────────
   mp.put("ExperimentalMode",      False)
   mp.put("IQDynamicMode",         False)
-  mp.put("LongitudinalPersonality", 1)   # 0=aggressive,1=standard,2=relaxed,3=stock
+  mp.put("LongitudinalPersonality", 1)
   mp.put("IQSpeedAssistMode",        0)     # 0=off
 
   # ── Misc / system ─────────────────────────────────────────────────────────

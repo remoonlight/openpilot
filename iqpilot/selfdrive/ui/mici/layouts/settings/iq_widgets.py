@@ -3,6 +3,15 @@ Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed 
 """
 
 from iqpilot.common.params import Params, UnknownKeyName
+from iqpilot.selfdrive.longitudinal_settings import (
+  LONGITUDINAL_MODE_DYNAMIC,
+  LONGITUDINAL_MODE_PILOT,
+  PERSONALITY_VALUES,
+  apply_longitudinal_mode,
+  get_follow_distance_state,
+  get_longitudinal_mode,
+  set_valid_personality,
+)
 from iqpilot.selfdrive.ui.mici.widgets.stock_button import BigButton, BigMultiToggle, BigToggle, BigParamControl
 from iqpilot.system.ui.lib.multilang import tr
 
@@ -90,27 +99,49 @@ class MappedParamToggle(BigMultiToggle):
       pass
 
 
+class FollowDistanceSelector(BigMultiToggle):
+  OPTIONS = ["aggressive", "standard", "relaxed", "stock"]
+
+  def __init__(self):
+    self._display_options = [tr(option) for option in self.OPTIONS]
+    super().__init__(tr("Follow Distance"), self._display_options)
+    self._params = Params()
+    self.refresh()
+
+  def refresh(self):
+    selection, enabled = get_follow_distance_state(self._params)
+    self.set_value(self._display_options[3 if selection is None else selection])
+    self.set_enabled(enabled)
+
+  def _handle_mouse_release(self, mouse_pos):
+    if get_longitudinal_mode(self._params) not in (LONGITUDINAL_MODE_DYNAMIC, LONGITUDINAL_MODE_PILOT):
+      return
+    BigButton._handle_mouse_release(self, mouse_pos)
+    selection, _ = get_follow_distance_state(self._params)
+    if selection is None:
+      self.refresh()
+      return
+    next_selection = PERSONALITY_VALUES[(PERSONALITY_VALUES.index(selection) + 1) % len(PERSONALITY_VALUES)]
+    set_valid_personality(self._params, next_selection)
+    self.set_value(self._display_options[next_selection])
+
+
 class IQModeSelector(BigMultiToggle):
   """Longitudinal mode selector: Stock ACC / IQ.Chill / IQ.Dynamic / IQ.Pilot.
 
   A single tap cycles to the next mode and applies the matching param combo immediately.
   """
   OPTIONS = ["Stock ACC", "IQ.Chill", "IQ.Dynamic", "IQ.Pilot"]
-  PERSONALITY_RELAXED = 2
 
-  def __init__(self):
+  def __init__(self, mode_callback=None):
     self._display_options = [tr(option) for option in self.OPTIONS]
     super().__init__(tr("IQ Mode"), self._display_options)
     self._params = Params()
+    self._mode_callback = mode_callback
     self.refresh()
 
   def _index(self) -> int:
-    p = self._params
-    if not p.get_bool("AlphaLongitudinalEnabled"):
-      return 0
-    if not p.get_bool("ExperimentalMode"):
-      return 1
-    return 2 if p.get_bool("IQDynamicMode") else 3
+    return get_longitudinal_mode(self._params)
 
   def is_dynamic(self) -> bool:
     return self._index() == 2
@@ -119,27 +150,12 @@ class IQModeSelector(BigMultiToggle):
     self.set_value(self._display_options[self._index()])
 
   def _apply(self, idx: int):
-    p = self._params
-    if idx == 0:
-      p.put_bool("AlphaLongitudinalEnabled", False)
-      p.put_bool("ExperimentalMode", False)
-      p.put_bool("IQDynamicMode", False)
-    elif idx == 1:
-      p.put_bool("AlphaLongitudinalEnabled", True)
-      p.put_bool("ExperimentalMode", False)
-      p.put_bool("IQDynamicMode", False)
-      p.put("LongitudinalPersonality", self.PERSONALITY_RELAXED)
-    elif idx == 2:
-      p.put_bool("AlphaLongitudinalEnabled", True)
-      p.put_bool("ExperimentalMode", True)
-      p.put_bool("IQDynamicMode", True)
-    else:
-      p.put_bool("AlphaLongitudinalEnabled", True)
-      p.put_bool("ExperimentalMode", True)
-      p.put_bool("IQDynamicMode", False)
-    p.put_bool("OnroadCycleRequested", True)
+    apply_longitudinal_mode(self._params, idx)
+    self._params.put_bool("OnroadCycleRequested", True)
 
   def _handle_mouse_release(self, mouse_pos):
     nxt = (self._index() + 1) % len(self.OPTIONS)
     self._apply(nxt)
     self.set_value(self._display_options[nxt])
+    if self._mode_callback:
+      self._mode_callback()

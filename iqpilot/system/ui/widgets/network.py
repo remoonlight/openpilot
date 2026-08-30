@@ -468,9 +468,9 @@ class WifiManagerUI(Widget):
 
         if show_disconnect:
           disconnect_btn_rect = rl.Rectangle(
-            forget_btn_rect.x - self.btn_width - spacing,
+            forget_btn_rect.x - self.disconnect_btn_width - spacing,
             forget_btn_rect.y,
-            self.btn_width,
+            self.disconnect_btn_width,
             80,
           )
           self._disconnect_networks_buttons[network.ssid].render(disconnect_btn_rect)

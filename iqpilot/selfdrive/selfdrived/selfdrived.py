@@ -22,19 +22,12 @@ from iqpilot.selfdrive.selfdrived.events import Events, ET
 from iqpilot.selfdrive.selfdrived.helpers import ExcessiveActuationCheck
 from iqpilot.selfdrive.selfdrived.state import StateMachine
 from iqpilot.selfdrive.selfdrived.alertmanager import AlertManager, set_offroad_alert
+from iqpilot.selfdrive.longitudinal_settings import get_runtime_personality
 
 from iqpilot.system.version import get_build_metadata
 from iqpilot.system.hardware import HARDWARE
 
 from iqpilot.sab.behavior import SteeringAssistanceBehavior
-def get_sanitize_int_param(key, min_val, max_val, params):
-  stored = params.get(key, return_default=True)
-  bounded = min(max(stored, min_val), max_val)
-  if bounded != stored:
-    params.put(key, bounded)
-  return bounded
-
-
 from iqpilot.selfdrive.controls.lib.helpers.lane_change import NAV_EXIT_COMMIT_DISTANCE
 from iqpilot.vehicle.vehicle import VehicleEvents
 from iqpilot.selfdrive.car.gap_button_actions import GapButtonActions
@@ -158,12 +151,7 @@ class SelfdriveD(GapButtonActions):
     self.not_running_prev = None
     self.wide_cam_faulty = False
     self.experimental_mode = False
-    self.personality = get_sanitize_int_param(
-      "LongitudinalPersonality",
-      min(log.LongitudinalPersonality.schema.enumerants.values()),
-      max(log.LongitudinalPersonality.schema.enumerants.values()),
-      self.params
-    )
+    self.personality = get_runtime_personality(self.params)
     self.recalibrating_seen = False
     self.state_machine = StateMachine()
     self.rk = Ratekeeper(100, print_delay_threshold=None)
@@ -225,6 +213,9 @@ class SelfdriveD(GapButtonActions):
 
     model_data = self._get_model_data_ext()
     model_events = []
+    if model_data.lateralEdgeBlock != custom.IQLateralEdgeBlock.none:
+      model_events.append(custom.IQOnroadEvent.EventName.lateralEdgeBlocked)
+
     lane_turn_direction = model_data.turnSignalDirection
     if lane_turn_direction == TurnDirection.turnLeft:
       model_events.append(custom.IQOnroadEvent.EventName.modelTurnLeft)
@@ -783,16 +774,7 @@ class SelfdriveD(GapButtonActions):
       self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
       self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
-      # Params can be changed while selfdrived is running. Keep the live value in
-      # the same valid enum range enforced during startup; otherwise a stale value
-      # (for example 3) makes the alert callback lookup raise KeyError and kills
-      # selfdrived.
-      self.personality = get_sanitize_int_param(
-        "LongitudinalPersonality",
-        min(log.LongitudinalPersonality.schema.enumerants.values()),
-        max(log.LongitudinalPersonality.schema.enumerants.values()),
-        self.params,
-      )
+      self.personality = get_runtime_personality(self.params)
       self.nav_exit_lane_change = self._read_nav_exit_lane_change()
       self.model_download_pending = self.params.get("ModelManager_DownloadIndex") is not None
 

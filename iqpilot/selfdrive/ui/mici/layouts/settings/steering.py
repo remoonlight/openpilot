@@ -78,8 +78,10 @@ class LaneChangePanel(NavScroller):
                                     [tr("off"), tr("nudge"), tr("no nudge"), "0.5 s", "1 s", "2 s", "3 s"],
                                     [-1, 0, 1, 2, 3, 4, 5])
     self._bsm_delay = BigParamControl(tr("Delay with Blind Spot"), "IQLaneChangeBsmDelay")
+    self._edge_guard = BigParamControl(tr("Lane Edge Guard"), "IQEdgeGuard")
+    self._edge_guard.set_value(tr("Blocks lane changes when a road edge is detected on the target side."))
     self._continuous = BigParamControl(tr("Continuous Changes"), "LaneChangeContinuous")
-    self._scroller.add_widgets([self._timer, self._bsm_delay, self._continuous])
+    self._scroller.add_widgets([self._timer, self._bsm_delay, self._edge_guard, self._continuous])
 
   def show_event(self):
     super().show_event()
@@ -91,6 +93,7 @@ class LaneChangePanel(NavScroller):
     self._bsm_delay.set_enabled(
       enable_bsm and int(ui_state.params.get("IQLaneChangeTimer", return_default=True)) > AutoLaneChangeMode.NUDGE
     )
+    self._edge_guard.refresh()
     self._continuous.refresh()
 
 

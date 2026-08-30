@@ -323,6 +323,8 @@ struct IQOnroadEvent @0xf4621d3ee9233bc9 {
     # camera hardware
     wideCamFaulty @32;
 
+    lateralEdgeBlocked @33;
+
   }
 }
 
@@ -505,8 +507,15 @@ enum IQTurnSignalDirection {
   turnRight @2;
 }
 
+enum IQLateralEdgeBlock {
+  none @0;
+  left @1;
+  right @2;
+}
+
 struct IQDriveModelData @0xcdf0f7f14f46cb86 {
   turnSignalDirection @0 :IQTurnSignalDirection;
+  lateralEdgeBlock @1 :IQLateralEdgeBlock;
 }
 
 enum NavDirection {

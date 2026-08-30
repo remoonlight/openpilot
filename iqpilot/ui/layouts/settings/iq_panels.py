@@ -614,6 +614,11 @@ class LaneChangeSettingsLayout(Widget):
       description=lambda: tr("Hold the automatic lane change while blind spot monitoring reports a car in the "
                              "target lane, releasing it once the lane is clear."),
     )
+    self._edge_guard = toggle_item(
+      param="IQEdgeGuard",
+      title=lambda: tr("Lane Edge Guard"),
+      description=lambda: tr("Blocks lane changes when a road edge is detected on the target side."),
+    )
     self._continuous = toggle_item(
       param="LaneChangeContinuous",
       title=lambda: tr("Auto Lane Change: Continuous Changes"),
@@ -625,6 +630,8 @@ class LaneChangeSettingsLayout(Widget):
       self._lane_change_timer,
       IQLineSeparator(40),
       self._bsm_delay,
+      IQLineSeparator(40),
+      self._edge_guard,
       IQLineSeparator(40),
       self._continuous,
     ]

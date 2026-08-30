@@ -3,12 +3,10 @@ Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed 
 """
 
 from iqpilot.selfdrive.ui.mici.widgets.stock_button import BigButton, BigParamControl
-from iqpilot.selfdrive.ui.mici.layouts.settings.iq_widgets import MappedParamToggle, IQModeSelector, SafeParamControl
+from iqpilot.selfdrive.ui.mici.layouts.settings.iq_widgets import FollowDistanceSelector, MappedParamToggle, IQModeSelector, SafeParamControl
 from iqpilot.system.ui.lib.application import gui_app
 from iqpilot.system.ui.widgets.scroller import NavScroller
 from iqpilot.system.ui.lib.multilang import tr
-
-FOLLOW_DISTANCE_VALUES = [0, 1, 2, 3]
 
 MS_TO_MPH = 2.23694
 _SPEED_MPH = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]
@@ -77,12 +75,11 @@ class CruiseLayoutMici(NavScroller):
     self._dynamic_panel = DynamicSettingsPanel()
     self._slc_panel = SlcSettingsPanel()
 
-    self._mode = IQModeSelector()
+    self._follow_dist = FollowDistanceSelector()
+    self._mode = IQModeSelector(self._follow_dist.refresh)
     self._dynamic_settings = BigButton(tr("iq.dynamic settings"))
     self._dynamic_settings.set_click_callback(lambda: gui_app.push_widget(self._dynamic_panel))
     self._dynamic_settings.set_visible(self._mode.is_dynamic)
-    self._follow_dist = MappedParamToggle(tr("Follow Distance"), "LongitudinalPersonality",
-                                          [tr("aggressive"), tr("standard"), tr("relaxed"), tr("stock")], FOLLOW_DISTANCE_VALUES)
     self._speed_limit = MappedParamToggle(tr("Speed Limit"), "IQSpeedAssistMode",
                                           [tr("off"), tr("info"), tr("warning"), tr("control")])
     self._slc_settings = BigButton(tr("speed limit settings"))
