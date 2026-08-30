@@ -474,6 +474,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"SpeedCameraSlowdown", {PERSISTENT, BOOL, "0"}},
     {"SpeedCameraSafetyFactor", {PERSISTENT, FLOAT, "1.0"}},
     {"NavCamerasData", {PERSISTENT, JSON}},
+    {"NavCameraRoadGraphData", {PERSISTENT, JSON}},
     {"WazePoliceApiKey", {PERSISTENT | DONT_LOG, STRING}},
     {"WazePoliceAlertMode", {PERSISTENT, INT, "0"}},
     {"WazePoliceShadow", {PERSISTENT, BOOL, "0"}},

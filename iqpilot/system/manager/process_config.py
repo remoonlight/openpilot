@@ -222,6 +222,8 @@ procs += [
                 and_(only_onroad, and_(is_tinygrad_model, emac_enabled)), restart_if_crash=True),
   PythonProcess("iqegpumodeld", "iqpilot.selfdrive.iqmodeld.iqegpumodeld",
                 and_(only_onroad, and_(is_tinygrad_model, egpu_enabled)), restart_if_crash=True),
+  PythonProcess("egpu_prefetch", "iqpilot.selfdrive.iqmodeld.egpu_prefetch",
+                and_(only_offroad, and_(is_tinygrad_model, egpu_enabled)), restart_if_crash=True),
 
   BundleProcess("backup_manager_k3", "iqpilot_hephaestusd_private", "iqpilot_private.konn3kt.backups.backup_orchestrator",
                 and_(only_offroad, hephaestus_ready_shim, not_low_power)),

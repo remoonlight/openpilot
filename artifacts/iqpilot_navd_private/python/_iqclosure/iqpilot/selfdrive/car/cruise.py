@@ -6,6 +6,7 @@ from iqpilot.common.constants import CV
 from iqpilot.cereal import car, custom
 from iqdbc.car import structs
 from iqpilot.common.params import Params
+from iqpilot.common.realtime import DT_CTRL
 from iqpilot.selfdrive.car.long_increments import LongIncrementConfig, read_long_increment_config, resolve_button_step
 
 
@@ -237,6 +238,35 @@ class VCruiseHelper(VCruiseHelperIQ):
     self.v_cruise_kph_last = 0
     self.button_timers = {ButtonType.decelCruise: 0, ButtonType.accelCruise: 0}
     self.button_change_states = {btn: {"standstill": False, "enabled": False} for btn in self.button_timers}
+    self.slc_set_speed_request_id = 0
+    self.slc_set_speed_gesture_id = 0
+    self.slc_set_speed_request_kph = 0.0
+    self._slc_accel_held = False
+    self._slc_accel_release_frames = 0
+    self._slc_pcm_speed_last = None
+
+  def _update_slc_accel_gesture(self, CS):
+    self._slc_accel_release_frames = max(0, self._slc_accel_release_frames - 1)
+    for button in CS.buttonEvents:
+      if button.type in (ButtonType.accelCruise, ButtonType.resumeCruise):
+        if button.pressed:
+          self.slc_set_speed_gesture_id = (self.slc_set_speed_gesture_id + 1) % (1 << 32)
+          self._slc_accel_release_frames = 0
+        else:
+          self._slc_accel_release_frames = int(0.5 / DT_CTRL)
+        self._slc_accel_held = button.pressed
+      elif button.pressed:
+        self._slc_accel_held = False
+        self._slc_accel_release_frames = 0
+    if not CS.cruiseState.available:
+      self._slc_accel_held = False
+      self._slc_accel_release_frames = 0
+
+  def _record_slc_set_speed_increase(self, previous_kph, enabled):
+    if enabled and (self._slc_accel_held or self._slc_accel_release_frames > 0) and \
+       previous_kph is not None and 0 < previous_kph < self.v_cruise_kph <= V_CRUISE_MAX:
+      self.slc_set_speed_request_id = (self.slc_set_speed_request_id + 1) % (1 << 32)
+      self.slc_set_speed_request_kph = float(self.v_cruise_kph)
 
   @property
   def v_cruise_initialized(self):
@@ -248,6 +278,7 @@ class VCruiseHelper(VCruiseHelperIQ):
 
   def update_v_cruise(self, CS, enabled, is_metric):
     self.v_cruise_kph_last = self.v_cruise_kph
+    self._update_slc_accel_gesture(CS)
 
     self.get_minimum_set_speed(is_metric)
 
@@ -256,12 +287,15 @@ class VCruiseHelper(VCruiseHelperIQ):
       if not self.CP.pcmCruise or (not self.CP_IQ.pcmCruiseSpeed and _enabled):
         # if stock cruise is completely disabled, then we can use our own set speed logic
         self._update_v_cruise_non_pcm(CS, _enabled, is_metric, self.volkswagen_standby_set_speed)
+        self._record_slc_set_speed_increase(self.v_cruise_kph_last, _enabled)
         self.update_speed_limit_assist_v_cruise_non_pcm()
         self.v_cruise_cluster_kph = self.v_cruise_kph
         self.update_button_timers(CS, enabled)
       else:
         self.v_cruise_kph = CS.cruiseState.speed * CV.MS_TO_KPH
         self.v_cruise_cluster_kph = CS.cruiseState.speedCluster * CV.MS_TO_KPH
+        self._record_slc_set_speed_increase(self._slc_pcm_speed_last, _enabled)
+        self._slc_pcm_speed_last = self.v_cruise_kph
         if CS.cruiseState.speed == 0:
           self.v_cruise_kph = V_CRUISE_UNSET
           self.v_cruise_cluster_kph = V_CRUISE_UNSET
@@ -273,6 +307,7 @@ class VCruiseHelper(VCruiseHelperIQ):
     else:
       self.v_cruise_kph = V_CRUISE_UNSET
       self.v_cruise_cluster_kph = V_CRUISE_UNSET
+      self._slc_pcm_speed_last = None
 
   def _update_v_cruise_non_pcm(self, CS, enabled, is_metric, allow_standby_adjustment=False):
     # handle button presses. TODO: this should be in state_control, but a decelCruise press

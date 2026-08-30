@@ -6,12 +6,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+
+from iqpilot.common.swaglog import cloudlog
 import urllib.request
 from pathlib import Path
 
 from iqpilot.system.hardware.usb import egpu_dock_ready
 
 USB_SYSFS_ROOT = "/sys/bus/usb/devices"
+FIRMWARE_MIRROR = os.getenv("IQ_EGPU_FIRMWARE_MIRROR", "/data/firmware/tinygrad")
+TINYGRAD_CACHE = "/data/.cache"
 
 COMMA_LFS_BATCH_URL = "https://gitlab.com/commaai/openpilot-lfs.git/info/lfs/objects/batch"
 
@@ -60,6 +64,11 @@ def egpu_pkl_path(meta: dict) -> str:
 def egpu_policy_pkl_path(meta: dict) -> str:
   from iqpilot.system.hardware.hw import Paths
   return os.path.join(Paths.model_root(), f"egpu_{meta['key']}_{meta['sha256'][:8]}_amd_policy.pkl")
+
+
+def egpu_oob_pkl_path(meta: dict) -> str:
+  from iqpilot.system.hardware.hw import Paths
+  return os.path.join(Paths.model_root(), f"egpu_{meta['key']}_{meta['sha256'][:8]}_amd_policy_oob.pkl")
 
 
 def onnx_cache_path(meta: dict) -> str:
@@ -119,9 +128,14 @@ def download_onnx(meta: dict, progress_cb=None) -> str:
   if not download_url:
     raise RuntimeError(f"model {meta['key']} has no download source; stage the onnx at {onnx_cache_path(meta)}")
 
-  url = resolve_download_url(download_url, meta["sha256"], size)
   path = onnx_cache_path(meta)
   os.makedirs(os.path.dirname(path), exist_ok=True)
+  try:
+    from iqpilot.selfdrive.iqmodeld.model_bundle_downloader import download_hf_file
+    return download_hf_file(f"onnx/{meta['sha256']}.onnx", path, meta["sha256"], int(size or 0), progress_cb=progress_cb)
+  except Exception as e:
+    cloudlog.warning(f"onnx {meta['key']} unavailable from HF ({e}); falling back to {download_url.split(':', 1)[0]}")
+  url = resolve_download_url(download_url, meta["sha256"], size)
   tmp = path + ".part"
   digest = hashlib.sha256()
   got = 0
@@ -142,12 +156,20 @@ def download_onnx(meta: dict, progress_cb=None) -> str:
   return path
 
 
-def download_precompiled(meta: dict, progress_cb=None, policy: bool = False) -> str | None:
-  art = meta.get("egpu_policy_artifact" if policy else "egpu_artifact")
-  if not art or not art.get("objects"):
+def download_precompiled(meta: dict, progress_cb=None, policy: bool = False, oob: bool = False) -> str | None:
+  field = "egpu_oob_artifact" if oob else "egpu_policy_artifact" if policy else "egpu_artifact"
+  art = meta.get(field)
+  if not art or not (art.get("objects") or art.get("hf_path")):
     return None
-  from iqpilot.selfdrive.iqmodeld.model_bundle_downloader import download_lfs_bundle
-  dest = egpu_policy_pkl_path(meta) if policy else egpu_pkl_path(meta)
+  from iqpilot.selfdrive.iqmodeld.model_bundle_downloader import download_hf_file, download_lfs_bundle
+  dest = egpu_oob_pkl_path(meta) if oob else egpu_policy_pkl_path(meta) if policy else egpu_pkl_path(meta)
+  if art.get("hf_path"):
+    try:
+      return download_hf_file(art["hf_path"], dest, art["sha256"], int(art.get("size", 0)), progress_cb=progress_cb)
+    except Exception as e:
+      cloudlog.warning(f"precompiled {meta['key']} unavailable from HF ({e}); trying LFS")
+      if not art.get("objects"):
+        raise
   return download_lfs_bundle(art["objects"], dest, art["sha256"], int(art.get("size", 0)), progress_cb=progress_cb)
 
 
@@ -161,12 +183,27 @@ def patch_tinygrad_fetch_fw() -> None:
   _orig = helpers.fetch_fw
 
   def fetch_fw(path, name, sha256):
+    mirror = pathlib.Path(FIRMWARE_MIRROR) / path / name
+    if mirror.is_file():
+      blob = mirror.read_bytes()
+      if hashlib.sha256(blob).hexdigest() == sha256:
+        return blob
     p = pathlib.Path(f"/lib/firmware/{path}/{name}.zst")
     if p.is_file():
       blob = zstandard.ZstdDecompressor().stream_reader(p.read_bytes()).read()
       if hashlib.sha256(blob).hexdigest() == sha256:
         return blob
-    return _orig(path, name, sha256)
+    blob = _orig(path, name, sha256)
+    # The dock's GPU firmware otherwise lives only in tinygrad's per-user download cache, which is
+    # a network fetch the first time a new HOME sees it; onroad the car is usually offline.
+    try:
+      mirror.parent.mkdir(parents=True, exist_ok=True)
+      tmp = mirror.with_suffix(mirror.suffix + ".part")
+      tmp.write_bytes(blob)
+      os.replace(tmp, mirror)
+    except OSError:
+      pass
+    return blob
 
   fetch_fw._iq_patched = True
   helpers.fetch_fw = fetch_fw

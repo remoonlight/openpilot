@@ -7,13 +7,19 @@ import argparse
 import gc
 import os
 import pickle
+import sys
 import time
 
-os.environ.setdefault("DEV", "USB+AMD:LLVM")
 os.environ.setdefault("FLOAT16", "1")
 os.environ.setdefault("JIT_BATCH_SIZE", "0")
 os.environ.setdefault("GMMU", "0")
 os.environ.setdefault("TC_OPT", "2")
+
+HOST = "--host" in sys.argv
+if HOST:
+  from iqpilot.selfdrive.iqmodeld.tools.egpu_host_mock import DEFAULT_ARCH, activate
+  activate(sys.argv[sys.argv.index("--arch") + 1] if "--arch" in sys.argv else DEFAULT_ARCH)
+os.environ.setdefault("DEV", "USB+AMD:LLVM")
 
 import numpy as np
 
@@ -150,7 +156,7 @@ def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
   from tinygrad.engine.jit import TinyJit
   from tinygrad.nn.onnx import OnnxRunner
 
-  from iqpilot.selfdrive.iqmodeld.egpu_policy import POLICY_FORMAT, PackedInputs, make_queues, make_run_policy
+  from iqpilot.selfdrive.iqmodeld.egpu_policy import POLICY_FORMAT, PackedInputs, dump_oob, load_bundle, make_queues, make_run_policy
 
   if meta.get("split"):
     raise RuntimeError(f"model {meta['key']} is a split model; eGPU compiles fused models only")
@@ -176,7 +182,7 @@ def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
     baseline = step(SEED + i)
   if baseline.shape[0] != meta["output_len"]:
     raise RuntimeError(f"model output length {baseline.shape[0]} != registry {meta['output_len']}")
-  if not np.isfinite(baseline).all():
+  if not HOST and not np.isfinite(baseline).all():
     raise RuntimeError("compiled policy produced non-finite outputs")
 
   bundle = {
@@ -191,16 +197,15 @@ def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
   }
   os.makedirs(os.path.dirname(out_path), exist_ok=True)
   tmp = out_path + ".part"
-  print("serialize")
+  print("serialize (out-of-band buffers)")
   with open(tmp, "wb") as f:
-    pickle.dump(bundle, f, protocol=pickle.HIGHEST_PROTOCOL)
+    dump_oob(bundle, f)
 
   del bundle, jit, queues, packed
   gc.collect()
 
   print("reload + validate")
-  with open(tmp, "rb") as f:
-    jit = pickle.load(f)["run_policy"]
+  jit = load_bundle(tmp)["run_policy"]
   queues = make_queues(input_spec, frame_skip, device)
   packed = PackedInputs(input_spec)
   outs = []
@@ -211,6 +216,9 @@ def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
     flat = out.numpy().reshape(-1)
     packed.views["prev_feat"][:] = flat[meta["output_slices"]["hidden_state"]].reshape(packed.views["prev_feat"].shape)
     outs.append(flat)
+  if HOST:
+    os.replace(tmp, out_path)
+    return out_path
   if not np.array_equal(outs[-1], baseline):
     raise RuntimeError("policy outputs differ from baseline after pickle round trip")
   if np.array_equal(outs[0], outs[-1]):
@@ -234,7 +242,11 @@ def main() -> None:
   p.add_argument("--progress-base", type=float, default=None)
   p.add_argument("--progress-span", type=float, default=0.0)
   p.add_argument("--format", type=int, default=2, choices=(1, 2))
+  p.add_argument("--host", action="store_true", help="compile on a mock dock (no AMD hardware); outputs need a dock parity gate")
+  p.add_argument("--arch", default=None, help="target gfx arch for --host")
   args = p.parse_args()
+  if args.host and args.format != 2:
+    raise SystemExit("--host supports format 2 only")
 
   if args.model is not None:
     if args.model in EGPU_MODELS:

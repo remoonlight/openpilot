@@ -3,11 +3,18 @@ Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed 
 """
 from __future__ import annotations
 
+import io
 import math
+import os
+import pickle
+import shutil
+import struct
+import tempfile
 
 import numpy as np
 
 POLICY_FORMAT = 2
+OOB_MAGIC = b"IQEGPUOOB1"
 QUEUE_NAMES = ("img_q", "big_img_q", "feat_q", "desire_q")
 PACKED_ORDER = ("desire", "traffic_convention", "action_t", "prev_feat")
 
@@ -115,3 +122,50 @@ class PolicyRunner:
     flat = out.numpy().reshape(-1)
     v["prev_feat"][:] = flat[self._hidden].reshape(v["prev_feat"].shape)
     return flat
+
+
+def dump_oob(obj, f) -> None:
+  # Out-of-band pickle buffers keep the host peak at one tensor while the weights stream to the
+  # dock; a plain pickle keeps every weight referenced in the memo until load() returns (~1.7GB).
+  f.write(OOB_MAGIC)
+  with tempfile.TemporaryFile(dir=os.path.dirname(os.path.abspath(f.name)) or ".") as tmp:
+    def buffer_callback(pb: pickle.PickleBuffer):
+      m = pb.raw()
+      tmp.write(struct.pack("<q", m.nbytes))
+      tmp.write(m)
+      pb.release()
+    stream = io.BytesIO()
+    pickle.Pickler(stream, protocol=5, buffer_callback=buffer_callback).dump(obj)
+    opcodes = stream.getvalue()
+    f.write(struct.pack("<q", len(opcodes)))
+    f.write(opcodes)
+    tmp.seek(0)
+    shutil.copyfileobj(tmp, f)
+
+
+def is_oob(path: str) -> bool:
+  with open(path, "rb") as f:
+    return f.read(len(OOB_MAGIC)) == OOB_MAGIC
+
+
+def load_oob(f):
+  if f.read(len(OOB_MAGIC)) != OOB_MAGIC:
+    raise ValueError("not an out-of-band bundle")
+  opcodes = f.read(struct.unpack("<q", f.read(8))[0])
+
+  def buffers():
+    while (h := f.read(8)):
+      pb = pickle.PickleBuffer(bytearray(struct.unpack("<q", h)[0]))
+      f.readinto(pb)
+      yield pb
+
+  return pickle.load(io.BytesIO(opcodes), buffers=buffers())
+
+
+def load_bundle(path: str):
+  with open(path, "rb") as f:
+    if f.read(len(OOB_MAGIC)) == OOB_MAGIC:
+      f.seek(0)
+      return load_oob(f)
+    f.seek(0)
+    return pickle.load(f)

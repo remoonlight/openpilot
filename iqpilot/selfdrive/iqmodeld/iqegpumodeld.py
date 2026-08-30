@@ -4,6 +4,7 @@ Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed 
 from __future__ import annotations
 
 import os
+os.environ.setdefault("XDG_CACHE_HOME", "/data/.cache")
 import pickle
 import subprocess
 import sys
@@ -38,7 +39,7 @@ from iqpilot.selfdrive.iqmodeld.driving_action import (
   DESIRE_LEN, LAT_SMOOTH_SECONDS, LONG_SMOOTH_SECONDS, get_action_from_model,
 )
 from iqpilot.selfdrive.iqmodeld.egpu_helpers import (
-  download_onnx, download_precompiled, egpu_pkl_path, egpu_policy_pkl_path, egpu_present_consented, egpu_selected, local_onnx,
+  download_onnx, download_precompiled, egpu_oob_pkl_path, egpu_pkl_path, egpu_policy_pkl_path, egpu_present_consented, egpu_selected, local_onnx,
   patch_tinygrad_fetch_fw, quarantine_artifact, resolve_backend, usbgpu_present,
 )
 from iqpilot.selfdrive.iqmodeld.egpu_model import resolve_egpu_model
@@ -47,7 +48,7 @@ from iqpilot.selfdrive.iqmodeld.egpu_telemetry import EgpuDockTelemetry
 from iqpilot.selfdrive.iqmodeld.messaging import DrivePacketMemory, populate_drive_messages, populate_odometry_message
 from iqpilot.selfdrive.iqmodeld.metadata import Meta20hz
 from iqpilot.selfdrive.iqmodeld.model_channel import BIG_CHANNEL, ModelChannel
-from iqpilot.selfdrive.iqmodeld.egpu_policy import POLICY_FORMAT, PolicyRunner
+from iqpilot.selfdrive.iqmodeld.egpu_policy import POLICY_FORMAT, PolicyRunner, load_bundle
 from iqpilot.selfdrive.iqmodeld.model_warp import FrameWarp
 from iqpilot.selfdrive.iqmodeld.parser import PhaseParser
 
@@ -56,6 +57,9 @@ PROCESS_NAME = "iqpilot.selfdrive.iqmodeld.iqegpumodeld"
 PRESENCE_POLL_S = 5.0
 COMPILE_TIMEOUT_S = 3600
 LINK_UP_TIMEOUT_S = 10.0
+SETUP_EXIT_AFTER = 3
+MIN_LOAD_AVAIL_MB = 350
+MEMORY_WAIT_S = 90.0
 SETUP_RETRY_BASE_S = 3.0
 SETUP_RETRY_MAX_S = 30.0
 
@@ -106,13 +110,37 @@ _precompiled_tried = False
 
 def _ensure_artifact(params: Params, meta: dict) -> str:
   global _precompiled_tried
+  oob_path = egpu_oob_pkl_path(meta)
+  if os.path.isfile(oob_path):
+    return oob_path
   policy_path = egpu_policy_pkl_path(meta)
-  if os.path.isfile(policy_path):
-    return policy_path
   legacy_path = egpu_pkl_path(meta)
 
   params.put_bool("UsbGpuCompiled", False)
   params.put_bool("UsbGpuReady", False)
+
+  if meta.get("egpu_oob_artifact") and not _precompiled_tried:
+    _precompiled_tried = True
+    params.put("UsbGpuSetupProgress", "0.0")
+    oob_last = [-1.0]
+
+    def _oob_prog(p: float) -> None:
+      if p - oob_last[0] >= 0.02 or p >= 1.0:
+        oob_last[0] = p
+        params.put("UsbGpuSetupProgress", f"{p:.3f}")
+
+    try:
+      cloudlog.warning(f"iqegpumodeld downloading precompiled {meta['key']} (streamable) "
+                       f"({int(meta['egpu_oob_artifact'].get('size', 0)) / 1e6:.0f}MB)")
+      precompiled = download_precompiled(meta, progress_cb=_oob_prog, oob=True)
+      if precompiled is not None:
+        cloudlog.warning(f"iqegpumodeld precompiled ready -> {precompiled}")
+        return precompiled
+    except Exception as e:
+      cloudlog.warning(f"iqegpumodeld streamable artifact unavailable ({e}); falling back")
+
+  if os.path.isfile(policy_path):
+    return policy_path
 
   if meta.get("egpu_policy_artifact") and not _precompiled_tried:
     _precompiled_tried = True
@@ -157,12 +185,34 @@ def _ensure_artifact(params: Params, meta: dict) -> str:
   return policy_path
 
 
+def _mem_available_mb() -> int:
+  try:
+    with open("/proc/meminfo") as f:
+      for line in f:
+        if line.startswith("MemAvailable:"):
+          return int(line.split()[1]) // 1024
+  except OSError:
+    pass
+  return 1 << 20
+
+
+def _wait_for_memory(need_mb: int) -> None:
+  deadline = time.monotonic() + MEMORY_WAIT_S
+  avail = _mem_available_mb()
+  while avail < need_mb and time.monotonic() < deadline:
+    cloudlog.warning(f"iqegpumodeld waiting for memory: {avail}MB available, need {need_mb}MB")
+    time.sleep(5.0)
+    avail = _mem_available_mb()
+  if avail < need_mb:
+    raise RuntimeError(f"insufficient memory to load the dock model: {avail}MB available, need {need_mb}MB")
+
+
 def _load_infer_fn(pkl_path: str, meta: dict):
   patch_tinygrad_fetch_fw()
   from tinygrad.tensor import Tensor
 
-  with open(pkl_path, "rb") as f:
-    bundle = pickle.load(f)
+  _wait_for_memory(MIN_LOAD_AVAIL_MB)
+  bundle = load_bundle(pkl_path)
   if bundle.get("model_sha256") != meta["sha256"]:
     quarantine_artifact(pkl_path, "pkl model sha mismatch")
     raise RuntimeError(f"artifact model sha {bundle.get('model_sha256')} != {meta['sha256']}")
@@ -241,8 +291,14 @@ def main(demo: bool = False) -> None:
       break
     except Exception as e:
       attempt += 1
-      params.put("UsbGpuLastError", str(e)[:512])
-      cloudlog.warning(f"iqegpumodeld setup attempt {attempt} failed: {e}; retrying")
+      subs = "; ".join(f"{type(x).__name__}: {x}" for x in (getattr(e, "exceptions", None) or []))
+      params.put("UsbGpuLastError", (f"{e} [{subs}]" if subs else str(e))[:512])
+      cloudlog.warning(f"iqegpumodeld setup attempt {attempt} failed: {e}; {subs}; retrying")
+      if attempt >= SETUP_EXIT_AFTER:
+        # tinygrad keeps the dock's flock in a failed device init, so a stale process can never
+        # reopen it; exit and let the manager respawn a clean one.
+        cloudlog.error(f"iqegpumodeld giving up after {attempt} setup failures; exiting for a clean restart")
+        sys.exit(1)
       if not usbgpu_present():
         _wait_for_egpu(params)
       time.sleep(min(SETUP_RETRY_MAX_S, SETUP_RETRY_BASE_S * attempt))
