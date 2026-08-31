@@ -24,6 +24,10 @@ except Exception:  # ProprietaryModuleMissing or import errors in stripped build
 # Tile bundles live as LFS objects in the PRIVATE repo IQ.Lvbs/iqmaps (R2 is gone).
 # Anonymous access 404s by design; devices authenticate with the embedded read-only PAT
 # carried by the closed-source updater bundle (same fetch account as the OS images).
+# Hugging Face is primary: it is CDN-served, so device downloads no longer come off the
+# gitea box's home uplink. The gitea copies stay as failover -- if HF ever suspends the
+# repo the fleet silently falls back instead of losing maps entirely.
+HF_TILE_BUNDLE_BASE_URL = "https://huggingface.co/datasets/T3vl/iqmaps/resolve/main"
 DEFAULT_TILE_BUNDLE_BASE_URL = "https://git.konn3kt.com/IQ.Lvbs/iqmaps/raw/branch/master"
 FALLBACK_TILE_BUNDLE_BASE_URL = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/iqmaps/raw/branch/master"
 
@@ -47,7 +51,9 @@ def candidate_base_urls(params: Params) -> list[str]:
   override = (override or "").strip()
   if override:
     return [override.rstrip("/")]
-  urls: list[str] = []
+  # HF first (CDN, and it keeps device traffic off the gitea box's uplink); the bundle's
+  # own endpoints and the self-hosted defaults follow as failover.
+  urls: list[str] = [HF_TILE_BUNDLE_BASE_URL]
   if _private_base_urls is not None:
     try:
       urls.extend(url.rstrip("/") for url in _private_base_urls())
@@ -55,7 +61,12 @@ def candidate_base_urls(params: Params) -> list[str]:
       pass
   urls.append(DEFAULT_TILE_BUNDLE_BASE_URL)
   urls.append(FALLBACK_TILE_BUNDLE_BASE_URL)
-  return urls
+  seen: set[str] = set()
+  return [u for u in urls if not (u in seen or seen.add(u))]
+
+
+def _is_hf(url: str) -> bool:
+  return "huggingface.co" in url.lower()
 
 
 def _maps_auth_module():
@@ -83,6 +94,16 @@ def _maps_auth_module():
 def request_headers(url: str) -> dict:
   mod = _maps_auth_module()
   if mod is not None:
+    if _is_hf(url):
+      # HF wants a bearer token, not basic auth; a build whose bundle predates HF
+      # hosting simply gets nothing here and falls through to the gitea mirrors.
+      try:
+        token = mod.map_tiles_hf_token()
+        if token:
+          return {"Authorization": f"Bearer {token}"}
+      except Exception:
+        pass
+      return {}
     try:
       headers = mod.map_tiles_headers(url)
       if headers:
@@ -302,10 +323,12 @@ class TileBundleDownloader:
     # They stream back-to-back into ONE .part file: concatenating afterwards would need
     # double the free space, which devices do not have.
     base = f"{base_url}/{remote_path.lstrip('/')}"
-    if objects:
-      urls = [None] * len(objects)   # resolved per-attempt from the oid
+    count = len(objects) if objects else parts
+    if objects and not _is_hf(base_url):
+      urls = [None] * count          # gitea: resolved per-attempt from the oid
     else:
-      urls = [base] if parts <= 1 else [f"{base}.p{i:02d}" for i in range(parts)]
+      # HF (and plain mirrors) serve the same chunks as ordinary .pNN files
+      urls = [base] if count <= 1 else [f"{base}.p{i:02d}" for i in range(count)]
     part_path = final_path.with_name(final_path.name + ".part")
     part_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -335,7 +358,7 @@ class TileBundleDownloader:
         mode = "ab" if resume_from else "wb"
         with open(part_path, mode) as f:
           for index in range(first_part, len(urls)):
-            if objects:
+            if objects and not _is_hf(base_url):
               url_headers = request_headers(base_url)
               auth = None if url_headers else request_auth()
               object_url, object_headers = _resolve_oid_url(

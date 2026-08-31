@@ -138,6 +138,11 @@ def egpu_enabled(started, params, CP: car.CarParams) -> bool:
   return (resolve_backend(params.get_bool("IQEmacEnabled"), egpu_selected(params), _egpu_present(params)) == "egpu"
           and _egpu_present(params))
 
+def egpu_prefetch_enabled(started, params, CP: car.CarParams) -> bool:
+  if params.get_bool("IQEgpuDisabled"):
+    return False
+  return resolve_backend(params.get_bool("IQEmacEnabled"), True, _egpu_present(params)) == "egpu"
+
 def big_model_enabled(started, params, CP: car.CarParams) -> bool:
   return params.get_bool("IQEmacEnabled") or egpu_selected(params)
 
@@ -223,7 +228,7 @@ procs += [
   PythonProcess("iqegpumodeld", "iqpilot.selfdrive.iqmodeld.iqegpumodeld",
                 and_(only_onroad, and_(is_tinygrad_model, egpu_enabled)), restart_if_crash=True),
   PythonProcess("egpu_prefetch", "iqpilot.selfdrive.iqmodeld.egpu_prefetch",
-                and_(only_offroad, and_(is_tinygrad_model, egpu_enabled)), restart_if_crash=True),
+                and_(only_offroad, and_(is_tinygrad_model, egpu_prefetch_enabled)), restart_if_crash=True),
 
   BundleProcess("backup_manager_k3", "iqpilot_hephaestusd_private", "iqpilot_private.konn3kt.backups.backup_orchestrator",
                 and_(only_offroad, hephaestus_ready_shim, not_low_power)),

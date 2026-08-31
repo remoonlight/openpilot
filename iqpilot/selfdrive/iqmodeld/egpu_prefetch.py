@@ -10,7 +10,8 @@ import time
 
 from iqpilot.common.params import Params
 from iqpilot.common.swaglog import cloudlog
-from iqpilot.selfdrive.iqmodeld.egpu_helpers import download_precompiled, egpu_policy_pkl_path, egpu_selected, patch_tinygrad_fetch_fw, usbgpu_present
+from iqpilot.selfdrive.iqmodeld.egpu_helpers import (download_precompiled, egpu_oob_pkl_path, egpu_policy_pkl_path, patch_tinygrad_fetch_fw,
+                                                     usbgpu_present)
 from iqpilot.selfdrive.iqmodeld.egpu_model import resolve_egpu_model
 
 POLL_S = 30.0
@@ -28,7 +29,8 @@ def _selected_meta(params: Params) -> dict | None:
 
 def _drop_stale_partials(keep: str) -> None:
   root = os.path.dirname(keep)
-  for path in glob.glob(os.path.join(root, "egpu_*_amd_policy.pkl.part")) + glob.glob(os.path.join(root, "big_driving_supercombo_*.onnx.part")):
+  partial_globs = ("egpu_*_amd_policy.pkl.part", "egpu_*_amd_policy_oob.pkl.part", "big_driving_supercombo_*.onnx.part")
+  for path in [p for g in partial_globs for p in glob.glob(os.path.join(root, g))]:
     if not path.startswith(keep):
       try:
         os.remove(path)
@@ -37,15 +39,16 @@ def _drop_stale_partials(keep: str) -> None:
 
 
 def prefetch_once(params: Params) -> bool:
-  if not usbgpu_present() or not egpu_selected(params):
+  if params.get_bool("IQEgpuDisabled"):
     return False
   meta = _selected_meta(params)
   if meta is None:
     return False
-  dst = egpu_policy_pkl_path(meta)
+  oob = bool(meta.get("egpu_oob_artifact"))
+  dst = egpu_oob_pkl_path(meta) if oob else egpu_policy_pkl_path(meta)
   if os.path.isfile(dst):
     return True
-  if not meta.get("egpu_policy_artifact"):
+  if not oob and not meta.get("egpu_policy_artifact"):
     return False
   _drop_stale_partials(dst)
   params.put("UsbGpuSetupProgress", "0.0")
@@ -56,8 +59,8 @@ def prefetch_once(params: Params) -> bool:
       last[0] = p
       params.put("UsbGpuSetupProgress", f"{p:.3f}")
 
-  cloudlog.warning(f"egpu_prefetch downloading {meta['key']} policy artifact offroad")
-  out = download_precompiled(meta, progress_cb=_prog, policy=True)
+  cloudlog.warning(f"egpu_prefetch downloading {meta['key']} {'streamable' if oob else 'policy'} artifact offroad")
+  out = download_precompiled(meta, progress_cb=_prog, policy=not oob, oob=oob)
   cloudlog.warning(f"egpu_prefetch ready -> {out}")
   return out is not None
 

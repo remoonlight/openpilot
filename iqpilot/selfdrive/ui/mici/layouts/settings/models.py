@@ -137,7 +137,7 @@ class ModelsLayoutMici(NavScroller):
     self._redownload.set_enabled(self._can_redownload)
 
     self._refresh = BigButton(tr("reload model list"))
-    self._refresh.set_click_callback(lambda: ui_state.params.put("ModelManager_LastSyncTime", 0))
+    self._refresh.set_click_callback(self._reload_model_lists)
 
     self._supercombo = GreyBigButton(tr("combined model"))
     self._supercombo.set_visible(False)
@@ -355,10 +355,13 @@ class ModelsLayoutMici(NavScroller):
     btns = [_ModelButton(b, self._select_model, self._toggle_favorite, b.ref in favorites) for b in bundles]
     gui_app.push_widget(_ModelSelectPanel(btns))
 
+  def _reload_model_lists(self):
+    ui_state.params.put("ModelManager_LastSyncTime", 0)
+    _refresh_big_catalog()
+
   def _show_big_models(self):
+    _refresh_big_catalog()
     options = _big_options()
-    if len(options) <= 1:
-      _refresh_big_catalog()
     off = BigButton(tr("Off"))
     off.set_click_callback(lambda: self._select_big(None))
     btns = [off]

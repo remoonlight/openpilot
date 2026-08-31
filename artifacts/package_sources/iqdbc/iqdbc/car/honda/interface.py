@@ -5,7 +5,8 @@ from iqdbc.car.common.conversions import Conversions as CV
 from iqdbc.car.disable_ecu import disable_ecu, clear_all_dtcs, clear_ecu_dtcs
 from iqdbc.car.honda.hondacan import CanBus
 from iqdbc.car.honda.values import CarControllerParams, HondaFlags, CAR, HONDA_BOSCH, HONDA_BOSCH_CANFD, \
-                                                 HONDA_NIDEC_ALT_SCM_MESSAGES, HONDA_BOSCH_RADARLESS, HondaSafetyFlags
+                                                 HONDA_NIDEC_ALT_SCM_MESSAGES, HONDA_BOSCH_RADARLESS, \
+                                                 HONDA_RADAR_SCAN_VERIFIED, HondaSafetyFlags
 from iqdbc.car.honda.carcontroller import CarController
 from iqdbc.car.honda.carstate import CarState
 from iqdbc.car.honda.radar_interface import RadarInterface
@@ -48,7 +49,9 @@ class CarInterface(CarInterfaceBase):
         cfgs.insert(0, get_safety_config(structs.CarParams.SafetyModel.noOutput))
       ret.safetyConfigs = cfgs
 
-      ret.radarUnavailable = True
+      # The object scan survives openpilot longitudinal: the radar disable is subnet-scoped to the
+      # powertrain bus, while the scan rides the camera-side ACC-CAN
+      ret.radarUnavailable = docs or candidate not in HONDA_RADAR_SCAN_VERIFIED
       # Disable the radar and let openpilot control longitudinal
       # WARNING: THIS DISABLES AEB!
       # If Bosch radarless, this blocks ACC messages from the camera
