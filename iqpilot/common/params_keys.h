@@ -174,6 +174,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"IQCarParamsCache", {CLEAR_ON_MANAGER_START, BYTES}},
     {"IQCarParamsPersistent", {PERSISTENT, BYTES}},
     {"IQCarParamsPersistentV2", {PERSISTENT, BYTES}},
+    {"IQLongLearnedFactors", {PERSISTENT, JSON}},
     {"CarPlatformBundle", {PERSISTENT, JSON}},
     {"Konn3ktVwOdometers", {PERSISTENT, JSON}},
     {"Konn3ktVehicleOdometers", {PERSISTENT, JSON}},

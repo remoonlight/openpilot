@@ -11,6 +11,7 @@ import numpy as np
 from iqpilot.cereal import log, custom  # noqa: F401  (custom kept available for downstream imports)
 from iqdbc.car import structs
 from iqdbc.car.lateral import FRICTION_THRESHOLD, get_friction
+from iqdbc.car.toyota.values import ToyotaFlags
 from iqdbc.lvbs.car.interfaces import LatControlInputs
 from iqdbc.lvbs.car.iq_lateral import get_friction as get_friction_in_torque_space
 from iqpilot.common.basedir import BASEDIR
@@ -556,6 +557,8 @@ class LatControlTorque(LatControl):
     self.lat_accel_request_buffer = deque([0.] * self.lat_accel_request_buffer_len , maxlen=self.lat_accel_request_buffer_len)
     self.lookahead_frames = int(JERK_LOOKAHEAD_SECONDS / self.dt)
     self.jerk_filter = FirstOrderFilter(0.0, 1 / (2 * np.pi * LP_FILTER_CUTOFF_HZ), self.dt)
+    self.setpoint_lead_enabled = CP.brand == "toyota" and bool(CP.flags & ToyotaFlags.TSS2)
+    self.setpoint_lead_filter = FirstOrderFilter(0.0, 1 / (2 * np.pi * LP_FILTER_CUTOFF_HZ), self.dt)
     self.lateral_acceleration_slew_limiter = LateralAccelerationSlewLimiter(Params().get_bool("IQLateralAccelSlew"))
     self.curvature_lookahead_enabled = Params().get_bool("IQLateralCurvatureLookahead")
 
@@ -593,6 +596,10 @@ class LatControlTorque(LatControl):
     delay_frames = int(np.clip(lat_delay / self.dt + 1, 1, self.lat_accel_request_buffer_len))
     expected_lateral_accel = self.lat_accel_request_buffer[-delay_frames]
     setpoint = expected_lateral_accel
+    if self.setpoint_lead_enabled:
+      # the delayed setpoint mutes P/I for lat_delay after a ramp starts; lead by the filtered ramp rate so torque-capped TSS2 EPS turns in on time
+      request_ramp_rate = (future_desired_lateral_accel - expected_lateral_accel) / max(lat_delay, self.dt)
+      setpoint += self.setpoint_lead_filter.update(request_ramp_rate) * lat_delay
     error = setpoint - measurement
 
     lookahead_idx = int(np.clip(-delay_frames + self.lookahead_frames, -self.lat_accel_request_buffer_len+1, -2))
