@@ -8,6 +8,7 @@ from iqpilot.system.hardware import HARDWARE, PC, TICI
 from iqpilot.system.hardware.hw import Paths
 from iqpilot.system.manager.process import PythonProcess, NativeProcess, BundleProcess
 
+from iqpilot.selfdrive.iqmodeld.egpu_helpers import egpu_selected, resolve_backend, usbgpu_present
 from iqpilot.selfdrive.iqmodeld.models.helpers import get_active_model_runner
 from iqpilot.konn3kt.service_health import hephaestus_ready
 
@@ -124,6 +125,22 @@ def is_tinygrad_model(started, params, CP: car.CarParams) -> bool:
   """Check if the active model runner is tinygrad."""
   return bool(get_active_model_runner(params, not started) == custom.IQModelManager.Runner.tinygrad)
 
+def _egpu_present(params) -> bool:
+  if params.get_bool("IQEgpuDisabled"):
+    return False
+  return usbgpu_present()
+
+
+def emac_enabled(started, params, CP: car.CarParams) -> bool:
+  return resolve_backend(params.get_bool("IQEmacEnabled"), egpu_selected(params), _egpu_present(params)) == "emac"
+
+def egpu_enabled(started, params, CP: car.CarParams) -> bool:
+  return (resolve_backend(params.get_bool("IQEmacEnabled"), egpu_selected(params), _egpu_present(params)) == "egpu"
+          and _egpu_present(params))
+
+def big_model_enabled(started, params, CP: car.CarParams) -> bool:
+  return params.get_bool("IQEmacEnabled") or egpu_selected(params)
+
 def hephaestus_ready_shim(started, params, CP: car.CarParams) -> bool:
   return hephaestus_ready(params)
 
@@ -196,6 +213,17 @@ procs += [
   # Models
   BundleProcess("models_manager", "iqpilot_model_selector_private", "iqpilot_private.models.manager", and_(only_offroad, not_low_power)),
   NativeProcess("iqmodeld", "iqpilot/selfdrive/iqmodeld", ["./iqmodeld"], and_(only_onroad, is_tinygrad_model), restart_if_crash=True),
+  # big-model backends: iqmodeld self-demotes to the small channel worker when
+  # either backend is enabled; the selector publishes, and exactly one big
+  # worker (Mac or eGPU, eMac wins) feeds the BIG channel
+  PythonProcess("modeld_selector", "iqpilot.selfdrive.iqmodeld.modeld_selector",
+                and_(only_onroad, and_(is_tinygrad_model, big_model_enabled)), restart_if_crash=True),
+  BundleProcess("maciqmodeld", "iqpilot_emac_private", "iqpilot_private.emac.maciqmodeld",
+                and_(only_onroad, and_(is_tinygrad_model, emac_enabled)), restart_if_crash=True),
+  PythonProcess("iqegpumodeld", "iqpilot.selfdrive.iqmodeld.iqegpumodeld",
+                and_(only_onroad, and_(is_tinygrad_model, egpu_enabled)), restart_if_crash=True),
+  PythonProcess("egpu_prefetch", "iqpilot.selfdrive.iqmodeld.egpu_prefetch",
+                and_(only_offroad, and_(is_tinygrad_model, egpu_enabled)), restart_if_crash=True),
 
   BundleProcess("backup_manager_k3", "iqpilot_hephaestusd_private", "iqpilot_private.konn3kt.backups.backup_orchestrator",
                 and_(only_offroad, hephaestus_ready_shim, not_low_power)),

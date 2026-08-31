@@ -393,6 +393,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"OsmDownloadedDate", {PERSISTENT, STRING, "0.0"}},
     {"OSMDownloadLocations", {PERSISTENT, JSON}},
     {"AthenaNavigationRoute", {CLEAR_ON_MANAGER_START, JSON}},
+    {"Konn3ktNavigationSession", {CLEAR_ON_MANAGER_START, JSON}},
     {"NavigationActive", {CLEAR_ON_MANAGER_START, BOOL, "0"}},
     {"NavigationDestination", {CLEAR_ON_MANAGER_START, JSON}},
     {"NavigationEnabled", {PERSISTENT, BOOL, "0"}},

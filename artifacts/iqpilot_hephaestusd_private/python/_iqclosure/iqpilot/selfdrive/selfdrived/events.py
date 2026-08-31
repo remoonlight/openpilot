@@ -253,6 +253,15 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
                                        "Ensure road ahead is clear"),
   },
 
+  EventName.bigModelLoading: {
+    ET.NO_ENTRY: NoEntryAlert("Big Model Loading"),
+  },
+
+  EventName.bigModelFailed: {
+    ET.SOFT_DISABLE: soft_disable_alert("Big Model Failed"),
+    ET.PERMANENT: NormalPermanentAlert("Big Model Failed ", "Restart the car to retry,\nsmall model is still available", duration=20.),
+  },
+
   EventName.lateralManeuver: {
     ET.WARNING: longitudinal_maneuver_alert,
     ET.PERMANENT: NormalPermanentAlert("Lateral Maneuver Mode"),
@@ -366,7 +375,7 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
       "Pay Attention",
       "",
       AlertStatus.normal, AlertSize.small,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, .1),
+      Priority.MID, VisualAlert.none, AudibleAlert.none, .1),
   },
 
   EventName.promptDriverDistracted: {
@@ -892,7 +901,7 @@ if HARDWARE.get_device_type() == 'mici':
         "Pay Attention",
         "",
         AlertStatus.normal, AlertSize.small,
-        Priority.LOW, VisualAlert.none, AudibleAlert.none, 2),
+        Priority.MID, VisualAlert.none, AudibleAlert.none, 2),
     },
     EventName.promptDriverDistracted: {
       ET.PERMANENT: Alert(

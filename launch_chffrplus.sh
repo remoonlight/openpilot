@@ -265,6 +265,9 @@ function launch {
   if [ ! -f $DIR/prebuilt ]; then
     if pkill -f /tmp/installer 2>/dev/null; then sleep 1; fi
     "$DIR/.venv/bin/python3" ./build.py
+    for service_name in hephaestusd ble-transportd flockd; do
+      sudo systemctl restart --no-block "${service_name}.service"
+    done
   fi
 
   "$DIR/.venv/bin/python3" ./manager.py
