@@ -154,7 +154,11 @@ iq_pkg() {
   # the venv python has the component packages (iqdbc etc.); bare python3 does not
   local py=python3
   [[ -x "$IQ_ROOT/.venv/bin/python3" ]] && py="$IQ_ROOT/.venv/bin/python3"
-  (cd "$IQ_ROOT" && iq_run "$py" iqpilot/tools/scripts/setup_private_packages.py "$@")
+  if [[ -f "$IQ_ROOT/iqpilot/tools/scripts/setup_private_packages.py" ]]; then
+    (cd "$IQ_ROOT" && iq_run "$py" iqpilot/tools/scripts/setup_private_packages.py "$@")
+  else
+    iq_note 'private package sources are not present in this checkout'
+  fi
   if [[ -f "$IQ_ROOT/artifacts/runtime/ensure_private_installed.sh" ]]; then
     (cd "$IQ_ROOT" && iq_run bash artifacts/runtime/ensure_private_installed.sh)
   fi

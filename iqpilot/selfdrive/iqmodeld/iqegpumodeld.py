@@ -300,6 +300,10 @@ def main(demo: bool = False) -> None:
         cloudlog.error(f"iqegpumodeld giving up after {attempt} setup failures; exiting for a clean restart")
         sys.exit(1)
       if not usbgpu_present():
+        from iqpilot.system.hardware.usb import ensure_host_role
+        if ensure_host_role():
+          cloudlog.warning("iqegpumodeld: Type-C controller was out of host mode; restored")
+          time.sleep(2.0)
         _wait_for_egpu(params)
       time.sleep(min(SETUP_RETRY_MAX_S, SETUP_RETRY_BASE_S * attempt))
 
