@@ -323,9 +323,9 @@ static bool honda_tx_hook(const CANPacket_t *msg) {
   // FORCE CANCEL: safety check only relevant when spamming the cancel button in Bosch HW
   // ensuring that only the cancel button press is sent (VAL 2) when controls are off.
   // This avoids unintended engagements while still allowing resume spam
-  // On CAN FD and radarless, buttons are also sent to the camera (bus 2) to take over SCM_BUTTONS
-  // while engaged, so the same check applies there
-  const bool is_buttons_bus = (msg->bus == bus_buttons) || ((honda_bosch_canfd || honda_bosch_radarless) && (msg->bus == 2U));
+  // On CAN FD, buttons are also sent to the camera (bus 2) to take over SCM_BUTTONS while engaged, so
+  // the same check applies there (radarless already sends buttons on bus 2 via bus_buttons)
+  const bool is_buttons_bus = (msg->bus == bus_buttons) || (honda_bosch_canfd && (msg->bus == 2U));
   if ((msg->addr == 0x296U) && !controls_allowed && is_buttons_bus) {
     if (((msg->data[0] >> 5) & 0x7U) != 2U) {
       tx = false;
@@ -454,13 +454,10 @@ static safety_config honda_bosch_init(uint16_t param) {
                                               {0x33DA, 1, 5, .check_relay = true}, {0x33DB, 1, 8, .check_relay = true}, {0x39F, 1, 8, .check_relay = false},
                                               {0x18DAB0F1, 1, 8, .check_relay = false}};  // Bosch w/ gas and brakes
 
-  static CanMsg HONDA_RADARLESS_TX_MSGS[] = {{0xE4, 0, 5, .check_relay = true}, {0x296, 2, 4, .check_relay = false}, {0x33D, 0, 8, .check_relay = true},
-                                             {0x6CD5554, 0, 8, .check_relay = true}, {0xF31AA54, 0, 8, .check_relay = true},
-                                             {0x6CD5557, 0, 8, .check_relay = true}};  // Bosch radarless (LANE_PATH/LKAS_HUD_2/HUD_OBJECTS authored in stock ACC too)
+  static CanMsg HONDA_RADARLESS_TX_MSGS[] = {{0xE4, 0, 5, .check_relay = true}, {0x296, 2, 4, .check_relay = false}, {0x33D, 0, 8, .check_relay = true}};  // Bosch radarless
 
   static CanMsg HONDA_RADARLESS_LONG_TX_MSGS[] = {{0xE4, 0, 5, .check_relay = true}, {0x33D, 0, 8, .check_relay = true}, {0x1C8, 0, 8, .check_relay = true},
-                                                  {0x30C, 0, 8, .check_relay = true}, {0x296, 2, 4, .check_relay = false}, {0x6CD5554, 0, 8, .check_relay = true},
-                                                  {0xF31AA54, 0, 8, .check_relay = true}, {0x6CD5557, 0, 8, .check_relay = true}};  // Bosch radarless w/ gas and brakes
+                                                  {0x30C, 0, 8, .check_relay = true}};  // Bosch radarless w/ gas and brakes
 
   // 0x296 on bus 2: OP takes over SCM_BUTTONS towards the camera to auto-disable stock LKAS and to block
   // the driver's LKAS button while engaged (the physical SCM_BUTTONS is blocked from forwarding, see fwd hook)
@@ -585,7 +582,7 @@ static bool honda_bosch_fwd_hook(int bus_num, int addr) {
   // actually flowing (honda_op_buttons_fresh): the camera needs SCM_BUTTONS content beyond the buttons
   // (it raises an adaptive high beam error when the message goes missing), so a bare controls_allowed
   // gate would starve it whenever the panda allows controls but OP refuses to engage
-  if ((honda_bosch_radarless || honda_bosch_canfd) && controls_allowed && (honda_op_buttons_fresh > 0) &&
+  if (honda_bosch_canfd && controls_allowed && (honda_op_buttons_fresh > 0) &&
       (bus_num == 0) && (addr == 0x296)) {
     block_msg = true;
   }

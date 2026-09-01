@@ -39,6 +39,7 @@
 #define TOYOTA_COMMON_RX_CHECKS(lta)                                                                                                       \
   {.msg = {{ 0xaa, 0, 8, 83U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},  \
   {.msg = {{0x260, 0, 8, 50U, .ignore_counter = true, .ignore_quality_flag=!(lta)}, { 0 }, { 0 }}},                           \
+  {.msg = {{0x412, 2, 8, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true, .frequency = 1U}, { 0 }, { 0 }}},  \
 
 #define TOYOTA_RX_CHECKS(lta)                                                                                                               \
   TOYOTA_COMMON_RX_CHECKS(lta)                                                                                                              \
@@ -98,6 +99,15 @@ static int TOYOTA_GET_INTERCEPTOR(const CANPacket_t *msg) {
 }
 
 static void toyota_rx_hook(const CANPacket_t *msg) {
+  if (msg->bus == 2U) {
+    // TSS2 LKAS/LDA button is only observable via the camera's LKAS_HUD; it reads 1 or 2 while
+    // pressed and rests at 0, and without this edge AOL can never be granted lateral on Toyota.
+    if (msg->addr == 0x412U) {
+      unsigned int lda_on_message = (msg->data[3] >> 6U) & 0x3U;
+      aol_button_press = (lda_on_message != 0U) ? AOL_BUTTON_PRESSED : AOL_BUTTON_NOT_PRESSED;
+    }
+  }
+
   if (msg->bus == 0U) {
 
     // get eps motor torque (0.66 factor in dbc)

@@ -161,13 +161,15 @@ def _resolve_object_url(session: requests.Session, url: str, headers: dict) -> t
   probe = session.get(url, headers={**headers, "Accept-Encoding": None}, stream=True,
                       timeout=HTTP_TIMEOUT_S)
   probe.raise_for_status()
+  # A host that serves the bytes itself still needs the caller's auth on the real GET --
+  # returning {} here sends the download out anonymous and a private host answers 401.
   if int(probe.headers.get("content-length") or 0) >= 1024:
     probe.close()
-    return url, {}
+    return url, dict(headers)
   body = probe.content
   probe.close()
   if not body.startswith(LFS_POINTER_MAGIC):
-    return url, {}
+    return url, dict(headers)
 
   meta = dict(line.split(" ", 1) for line in body.decode().strip().splitlines() if " " in line)
   oid = meta["oid"].split(":", 1)[1]

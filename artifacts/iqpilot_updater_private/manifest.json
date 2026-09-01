@@ -16,22 +16,22 @@
   },
   "python/iqpilot_private/updater/_hf_maps_blob.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "f18e3a7886a2e6835c91936cc4a11b118c02576f827683cff2a8d8788c3d1628",
+    "sha256": "69b858142aeb82cf730f042f6bc354dabb19579654872eaed3f73d482a856802",
     "size": 67616
   },
   "python/iqpilot_private/updater/_iqos_pat_blob.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "9bb73ab877e3c87f415b07a780c807f6f686bf5d5c01f4f4866260d2812f0b8d",
+    "sha256": "d8d9ccc3059b6239f2be41437e97b160b96278e419d84f9c0c243a2ba3ebf94c",
     "size": 67616
   },
   "python/iqpilot_private/updater/_pat_blob.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "8e33ab06991537400b3c50d2bfe3483627b50c999d6ad0c44d27d09eacac9235",
+    "sha256": "cea69f651768732bcbbd1a7edff668876dcf6787c332e859f6f01c945d74cbe0",
     "size": 67616
   },
   "python/iqpilot_private/updater/git_remote.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "55db05006382a9212c300db2236590260b66489d904e19656f2cf03309de89bf",
+    "sha256": "384782451d53a5ca89809f05bf5c68577596dfbaca3f2f82bb0a972663897491",
     "size": 136608
   },
   "runtime": {
@@ -43,9 +43,9 @@
     }
   },
   "signatures": {
-    "python/iqpilot_private/updater/_hf_maps_blob.cpython-312-aarch64-linux-gnu.so": "8MfmjOuuJgGPd2959u6zSnbsfCGIcY8ut4vH4JW//Vqb51508zKFSZYbmsKYFSYmUYcsNrDdKlzG7cyxwi25CQ==",
-    "python/iqpilot_private/updater/_iqos_pat_blob.cpython-312-aarch64-linux-gnu.so": "7ygpLdx/E5TgYoL8OINkv4mYLVkAHlAG0Wh4ZBnXCdTi+fd1bySI+7WmQczoQMlk0VjtIqyJTus+tsRkXEjQDg==",
-    "python/iqpilot_private/updater/_pat_blob.cpython-312-aarch64-linux-gnu.so": "79iU094xiuJ25sF9qXaLqTS/f9AidQhDoTlj2HVBIWt6biVmBY0MpgHOXK7lhCskykR7H/8j9zp2SsA2dToaDA==",
-    "python/iqpilot_private/updater/git_remote.cpython-312-aarch64-linux-gnu.so": "rxKmOjUbaJRdo65i8bDae/zEDUXIWvOay4k+KJ3vuH1Z+jQQvRXuWjKAMtJX7a7v/zzTcg7ijY2CBfXEFZJRCQ=="
+    "python/iqpilot_private/updater/_hf_maps_blob.cpython-312-aarch64-linux-gnu.so": "2hlUdv1cuGpzNrKoSx3VqRGdaVsgkkGhiHKBirfYkEwJmQJizQ966d6iZQoIzh8LEmRdhi+77iLFXQiEWApSDQ==",
+    "python/iqpilot_private/updater/_iqos_pat_blob.cpython-312-aarch64-linux-gnu.so": "EHoKO6/esRwuP7oxR9a5FXiQVPjh+3CmtXS1jNQor7yOpra/LijNPHvvu423y+vlOn1KkVCbhZgaHrsB/3oJDA==",
+    "python/iqpilot_private/updater/_pat_blob.cpython-312-aarch64-linux-gnu.so": "oqWDyKXImMpVEHwBohGW1nL7oZaNMu12aP/zMfowkjDAsHZJOM+TOicUNketIi990nJMbhApcJk3zpoM+1nGCw==",
+    "python/iqpilot_private/updater/git_remote.cpython-312-aarch64-linux-gnu.so": "xp2MN37LX95Rbt3zGC/ZysyTCv8wUi6xpzbHoTLMwRfq4cDpWafItWgFiypcn5ANsAQA7weqMbihmtq6EbV3Bg=="
   }
 }

@@ -197,18 +197,19 @@ def create_lkas_hud(packer, bus, CP, hud_control, lat_active, steering_available
 
   if CP.carFingerprint in (HONDA_BOSCH_RADARLESS | HONDA_BOSCH_CANFD):
     lkas_hud_values['LANE_LINES'] = 3
-    lkas_hud_values['LKAS_PROBLEM'] = steer_fault_permanent
+    lkas_hud_values['DASHED_LANES'] = lat_active
+
+    # car likely needs to see LKAS_PROBLEM fall within a specific time frame, so forward from camera
     if CP.carFingerprint in HONDA_BOSCH_RADARLESS:
-      # gray lanes when disengaged
-      lkas_hud_values['DASHED_LANES'] = 1
-    else:
+      lkas_hud_values['LKAS_PROBLEM'] = lkas_hud['LKAS_PROBLEM']
+
+    if CP.carFingerprint in HONDA_BOSCH_CANFD:
+      lkas_hud_values['LKAS_PROBLEM'] = steer_fault_permanent
       # CAN FD: dashed lanes are the AOL armed indication (dashed_lanes is aol.enabled and not
       # latActive, which is not standstill-gated - so parked LKAS button presses produce cluster
       # feedback). ORed with lat_active so the engaged payload keeps SOLID and DASHED set together,
       # byte-matching the stock camera's lanes-on state
       lkas_hud_values['DASHED_LANES'] = dashed_lanes or lat_active
-
-    if CP.carFingerprint in HONDA_BOSCH_CANFD:
       # every payload change must coincide with an LKAS_STATE_CHANGE pulse (see carcontroller); keyed
       # on lat_active, not lanesVisible, so the dash LKAS indication follows AOL's lateral state
       lkas_hud_values['SOLID_LANES'] = lat_active

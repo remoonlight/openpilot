@@ -91,6 +91,35 @@ class TestToyotaSafetyBase(common.CarSafetyTest, common.LongitudinalAccelSafetyT
     values = {"MAIN_ON": enabled}
     return self.packer.make_can_msg_safety(msg, 0, values)
 
+  def _lkas_button_msg(self, lkas_button=False, lda_value=None):
+    values = {"LDA_ON_MESSAGE": (1 if lkas_button else 0) if lda_value is None else lda_value}
+    return self.packer.make_can_msg_safety("LKAS_HUD", 2, values)
+
+  def test_enable_control_allowed_with_aol_button(self):
+    for enable_aol in (True, False):
+      with self.subTest("enable_aol", aol_enabled=enable_aol):
+        self.safety.set_aol_params(enable_aol, False, False)
+
+        self._rx(self._lkas_button_msg(False))
+        self.assertEqual(0, self.safety.get_aol_button_press())
+        self.assertFalse(self.safety.get_controls_allowed_lat())
+
+        self._rx(self._lkas_button_msg(True))
+        self.assertEqual(1, self.safety.get_aol_button_press())
+        self.assertEqual(enable_aol, self.safety.get_controls_allowed_lat())
+
+        self._rx(self._lkas_button_msg(False))
+        self.assertEqual(0, self.safety.get_aol_button_press())
+        self.assertEqual(enable_aol, self.safety.get_controls_allowed_lat())
+
+        self.safety.set_controls_allowed_lat(False)
+        self._rx(self._lkas_button_msg(False, lda_value=2))
+        self.assertEqual(1, self.safety.get_aol_button_press())
+        self.assertEqual(enable_aol, self.safety.get_controls_allowed_lat())
+        self._rx(self._lkas_button_msg(False))
+        self.safety.set_controls_allowed_lat(False)
+        self.safety.set_aol_params(False, False, False)
+
   def test_diagnostics(self, stock_longitudinal: bool = False, ecu_disabled: bool = True):
     for should_tx, msg in ((False, b"\x6D\x02\x3E\x00\x00\x00\x00\x00"),  # fwdCamera tester present
                            (False, b"\x0F\x03\xAA\xAA\x00\x00\x00\x00"),  # non-tester present

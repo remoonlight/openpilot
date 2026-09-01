@@ -429,55 +429,38 @@ class CarController(CarControllerBase, AolCarController, GasInterceptorCarContro
             self.gas = pcm_accel / self.params.NIDEC_GAS_MAX
 
     # Render OP's lane and lead cars on the dash. On CAN FD these are radar look-alikes that only
-    # exist (and are only allowed by panda safety) when the radar is disabled; in stock ACC the real
-    # radar still owns LANE_PATH/HUD_OBJECTS
-    if ((self.frame % 2 == 0 and self.CP.carFingerprint in HONDA_BOSCH_RADARLESS) or
-        (CS.radar_50hz_tick and self.CP.carFingerprint in HONDA_BOSCH_CANFD and self.CP.openpilotLongitudinalControl
-         and not CS.stock_acc_alive)):
+    # exist (and are only allowed by panda safety) when the radar is disabled. Radarless keeps the
+    # camera as the dash authority (known-good), so OP does not author these there
+    if (CS.radar_50hz_tick and self.CP.carFingerprint in HONDA_BOSCH_CANFD and self.CP.openpilotLongitudinalControl
+        and not CS.stock_acc_alive):
       leads = dash_objects.leads_from_model(self.model, CS.out.vEgo)
       lead = leads[0]
       lead_d = lead.dRel if lead.status else 0.0
       self.rendered_lane = self.lane_renderer.update(self.model, CS.out.vEgo, lead_d)
-      # the dash freezes the lane display if LANE_PATH and HUD_OBJECTS muxes don't match
-      if self.CP.carFingerprint in HONDA_BOSCH_CANFD:
-        mux = self.radar_mux
-        # no LKAS_HUD_2 on CAN FD: the dash reads the lane length from the in-band terminator, so the
-        # path is reshaped into the terminated-prefix form
-        lane_offsets = dash_lane.canfd_lane_offsets(self.rendered_lane)
-      else:
-        mux = dash_lane.MUX_CYCLE[(self.frame // 2) % len(dash_lane.MUX_CYCLE)]
-        lane_offsets = self.rendered_lane.offsets
+      mux = self.radar_mux
+      # no LKAS_HUD_2 on CAN FD: the dash reads the lane length from the in-band terminator, so the
+      # path is reshaped into the terminated-prefix form
+      lane_offsets = dash_lane.canfd_lane_offsets(self.rendered_lane)
       lane_msg = dash_lane.create_lane_path(self.packer, self.CAN.lkas, lane_offsets, mux)
       can_sends.append(lane_msg)
 
       # CAN FD cars have no camera HUD_OBJECTS to poll (the disabled radar owned it): author OP's
       # lead in slot 0 with the other slots blank (tracks=None)
       tracks = CS.camera_object_tracker.snapshot() if CS.camera_object_tracker is not None else None
-      if self.CP.openpilotLongitudinalControl:
-        hud_msg = self.dash_object_author.create(self.packer, self.CAN.lkas, lead, tracks, mux, now_nanos * 1e-9,
-                                                 extra_leads=leads[1:])
-      else:
-        # for stock ACC, forward the camera's objects but with our mux
-        hud_msg = dash_objects.forward_hud_object(self.packer, self.CAN.lkas, mux, tracks)
+      hud_msg = self.dash_object_author.create(self.packer, self.CAN.lkas, lead, tracks, mux, now_nanos * 1e-9,
+                                               extra_leads=leads[1:])
       can_sends.append(hud_msg)
 
-      # on CAN FD the camera (behind the relay) also consumes these; mirror the identical packed
-      # bytes onto the camera bus (packed once, so the counter/checksum stay in lockstep)
-      if self.CP.carFingerprint in HONDA_BOSCH_CANFD:
-        for addr, dat, _ in (lane_msg, hud_msg):
-          can_sends.append((addr, dat, self.CAN.camera))
+      # the camera (behind the relay) also consumes these; mirror the identical packed bytes onto the
+      # camera bus (packed once, so the counter/checksum stay in lockstep)
+      for addr, dat, _ in (lane_msg, hud_msg):
+        can_sends.append((addr, dat, self.CAN.camera))
 
-    if self.frame % 20 == 0 and self.CP.carFingerprint in HONDA_BOSCH_RADARLESS:
-      # COUNTER_2 trails the packer's COUNTER (frame//20 % 4) by one
-      rl = self.rendered_lane
-      can_sends.append(dash_lane.create_lkas_hud_2(self.packer, self.CAN.lkas, (self.frame // 20 - 1) % 4,
-                                                   rl.reach, rl.lane_cross, rl.left_line, rl.right_line))
-
-    # Radarless + CAN FD: when stock LKAS is active, the touch-steering-wheel nag eventually forces an
-    # ACC disengagement (on CAN FD it shows up as a brake tap from the VSA). Disable LKAS automatically
-    # and block the driver's LKAS button by taking over SCM_BUTTONS on the camera bus while engaged
-    # (panda blocks the forwarded stock SCM_BUTTONS while this stream flows)
-    if self.CP.carFingerprint in (HONDA_BOSCH_RADARLESS | HONDA_BOSCH_CANFD) and CC.enabled and self.frame % 4 == 0 and \
+    # CAN FD: when stock LKAS is active, the touch-steering-wheel nag eventually forces an ACC
+    # disengagement (a brake tap from the VSA). Disable LKAS automatically and block the driver's LKAS
+    # button by taking over SCM_BUTTONS on the camera bus while engaged (panda blocks the forwarded
+    # stock SCM_BUTTONS while this stream flows). Radarless keeps the stock camera LKAS untouched
+    if self.CP.carFingerprint in HONDA_BOSCH_CANFD and CC.enabled and self.frame % 4 == 0 and \
         not pcm_cancel_cmd and not CC.cruiseControl.resume:
       if self.lkas_button_send_remaining == 0 and CS.lkas_hud["LKAS_READY"] and self.frame >= self.last_lkas_button_frame + 500:
         self.lkas_button_send_remaining = 3

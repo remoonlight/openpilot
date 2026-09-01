@@ -609,40 +609,13 @@ class TestHondaBoschRadarlessSafetyBase(TestHondaBoschSafetyBase):
   STEER_BUS = 0
   BUTTONS_BUS = 2  # camera controls ACC, need to send buttons on bus 2
 
-  TX_MSGS = [[0xE4, 0], [0x296, 2], [0x33D, 0], [0x6CD5554, 0], [0xF31AA54, 0], [0x6CD5557, 0]]
-  FWD_BLACKLISTED_ADDRS = {2: [0xE4, 0x33D, 0x6CD5554, 0xF31AA54, 0x6CD5557]}
-  # STEERING_CONTROL, LANE_PATH, LKAS_HUD_2, HUD_OBJECTS
-  RELAY_MALFUNCTION_ADDRS = {0: (0xE4, 0x33D, 0x6CD5554, 0xF31AA54, 0x6CD5557)}
+  TX_MSGS = [[0xE4, 0], [0x296, 2], [0x33D, 0]]
+  FWD_BLACKLISTED_ADDRS = {2: [0xE4, 0x33D]}
+  RELAY_MALFUNCTION_ADDRS = {0: (0xE4, 0x33D)}  # STEERING_CONTROL
 
   def setUp(self):
     self.packer = CANPackerSafety("honda_bosch_radarless_generated")
     self.safety = libsafety_py.libsafety
-
-  def test_buttons_fwd(self):
-    # SCM_BUTTONS (0x296) forwards to the camera unless OP's replacement button stream is flowing
-    # (engaged + a recent OP SCM_BUTTONS tx on the camera bus). The camera needs the message content
-    # beyond the buttons, so the block fails safe back to forwarding when OP stops sending
-    self.safety.set_controls_allowed(False)
-    self.assertEqual(2, self.safety.safety_fwd_hook(0, 0x296))
-
-    # engaged but OP not sending buttons: keep forwarding
-    self.safety.set_controls_allowed(True)
-    self.assertEqual(2, self.safety.safety_fwd_hook(0, 0x296))
-
-    # OP button stream flowing: block the stock buttons
-    self.assertTrue(self._tx(self._button_msg(Btn.NONE, bus=2)))
-    self.assertEqual(-1, self.safety.safety_fwd_hook(0, 0x296))
-
-    # never blocked while disengaged
-    self.safety.set_controls_allowed(False)
-    self.assertEqual(2, self.safety.safety_fwd_hook(0, 0x296))
-    self.safety.set_controls_allowed(True)
-    self.assertEqual(-1, self.safety.safety_fwd_hook(0, 0x296))
-
-    # freshness decays after 10 stock button frames without an OP tx
-    for _ in range(10):
-      self._rx(self._button_msg(Btn.NONE, main_on=True))
-    self.assertEqual(2, self.safety.safety_fwd_hook(0, 0x296))
 
 
 class TestHondaBoschRadarlessSafety(HondaPcmEnableBase, TestHondaBoschRadarlessSafetyBase):
@@ -672,9 +645,9 @@ class TestHondaBoschRadarlessLongSafety(common.LongitudinalAccelSafetyTest, Hond
   """
     Covers the Honda Bosch Radarless safety mode with longitudinal control
   """
-  TX_MSGS = [[0xE4, 0], [0x33D, 0], [0x1C8, 0], [0x30C, 0], [0x296, 2], [0x6CD5554, 0], [0xF31AA54, 0], [0x6CD5557, 0]]
-  FWD_BLACKLISTED_ADDRS = {2: [0xE4, 0x33D, 0x1C8, 0x30C, 0x6CD5554, 0xF31AA54, 0x6CD5557]}
-  RELAY_MALFUNCTION_ADDRS = {0: (0xE4, 0x1C8, 0x30C, 0x33D, 0x6CD5554, 0xF31AA54, 0x6CD5557)}
+  TX_MSGS = [[0xE4, 0], [0x33D, 0], [0x1C8, 0], [0x30C, 0]]
+  FWD_BLACKLISTED_ADDRS = {2: [0xE4, 0x33D, 0x1C8, 0x30C]}
+  RELAY_MALFUNCTION_ADDRS = {0: (0xE4, 0x1C8, 0x30C, 0x33D)}
 
   def setUp(self):
     super().setUp()
