@@ -55,7 +55,7 @@ class TestLearnedFactorPersistence:
 
     other.CI.CC.gasfactor = 0.5
     other._save_learned_factors()
-    stored = json.loads(other.params.values["IQLongLearnedFactors"])
+    stored = other.params.values["IQLongLearnedFactors"]
     assert stored["HONDA_CRV_6G"]["gasfactor"] == 2.0
     assert stored["HONDA_CIVIC_BOSCH"]["gasfactor"] == 0.5
 
@@ -80,3 +80,40 @@ class TestLearnedFactorPersistence:
     car._seed_learned_factors()
     car._save_learned_factors()
     assert "IQLongLearnedFactors" not in car.params.values
+
+
+class TestLearnedFactorRealParams:
+  """Round-trips through the actual params store so the pyx JSON type marshaling is exercised:
+  JSON params take dicts on put and come back parsed on get."""
+
+  def make_real_car(self, tmp_path, controller):
+    from iqpilot.common.params import Params
+    car = object.__new__(Car)
+    car.params = Params(str(tmp_path))
+    car.CI = SimpleNamespace(CC=controller)
+    car.CP = SimpleNamespace(carFingerprint="HONDA_CIVIC_2022")
+    return car
+
+  def test_save_then_seed_through_real_params(self, tmp_path):
+    import time
+    car = self.make_real_car(tmp_path, HondaLikeController())
+    car.CI.CC.gasfactor = 1.31
+    car.CI.CC.windfactor = 0.88
+    car._save_learned_factors()
+    time.sleep(0.3)
+
+    fresh = self.make_real_car(tmp_path, HondaLikeController())
+    fresh._seed_learned_factors()
+    assert fresh.CI.CC.gasfactor == 1.31
+    assert fresh.CI.CC.windfactor == 0.88
+
+  def test_repeated_saves_through_real_params(self, tmp_path):
+    import time
+    car = self.make_real_car(tmp_path, HondaLikeController())
+    for value in (1.1, 1.2, 1.3):
+      car.CI.CC.gasfactor = value
+      car._save_learned_factors()
+      time.sleep(0.3)
+    fresh = self.make_real_car(tmp_path, HondaLikeController())
+    fresh._seed_learned_factors()
+    assert fresh.CI.CC.gasfactor == 1.3

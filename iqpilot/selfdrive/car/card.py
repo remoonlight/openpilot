@@ -270,10 +270,14 @@ class Car:
     return tuple(attr for attr in ("gasfactor", "windfactor") if hasattr(self.CI.CC, attr))
 
   def _stored_learned_factors(self) -> dict:
-    try:
-      stored = json.loads(self.params.get("IQLongLearnedFactors") or b"{}")
-    except ValueError:
-      stored = {}
+    # JSON-typed params come back already parsed from params_pyx; only the pure-python fallback
+    # returns raw bytes
+    stored = self.params.get("IQLongLearnedFactors")
+    if isinstance(stored, bytes | str):
+      try:
+        stored = json.loads(stored)
+      except ValueError:
+        stored = None
     return stored if isinstance(stored, dict) else {}
 
   def _seed_learned_factors(self):
@@ -292,14 +296,19 @@ class Car:
       return
     stored = self._stored_learned_factors()
     stored[str(self.CP.carFingerprint)] = {attr: float(getattr(self.CI.CC, attr)) for attr in attrs}
-    self.params.put_nonblocking("IQLongLearnedFactors", json.dumps(stored))
+    # JSON-typed params take the dict itself; params_pyx serializes and rejects pre-dumped strings
+    self.params.put_nonblocking("IQLongLearnedFactors", stored)
 
   def state_publish(self, CS: car.CarState, CS_IQ: custom.IQCarState, RD: structs.RadarDataT | None):
     """carState and carParams publish loop"""
 
-    # persist live-learned longitudinal factors so they survive across drives
+    # persist live-learned longitudinal factors so they survive across drives; card authors the
+    # car's CAN stream, so a persistence failure must never take it down mid-drive
     if self.sm.frame > 0 and self.sm.frame % int(60. / DT_CTRL) == 0:
-      self._save_learned_factors()
+      try:
+        self._save_learned_factors()
+      except Exception:
+        cloudlog.exception("failed to persist learned longitudinal factors")
 
     # carParams - logged every 50 seconds (> 1 per segment)
     if self.sm.frame % int(50. / DT_CTRL) == 0:
