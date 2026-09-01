@@ -67,6 +67,10 @@ sync_python_env() {
       && PYTHONPATH="$DIR" "$DIR/.venv/bin/python3" "$DIR/iqpilot/system/runtime_wheels_verify.py"; then
     RUNTIME_WHEELS_READY=1
   fi
+  if [ ! -f "$DIR/prebuilt" ] && [ ! -x "$DIR/.venv/bin/python3" ]; then
+    PACKAGES_READY=0
+    RUNTIME_WHEELS_READY=0
+  fi
   if [ "$PACKAGES_READY" != "1" ] || [ "$RUNTIME_WHEELS_READY" != "1" ]; then
     UV_CACHE_DIR="$DIR/.uv-cache"
     if [ ! -x "$DIR/.venv/bin/python3" ]; then
@@ -113,6 +117,9 @@ sync_python_env() {
       PYTHONPATH="$DIR" "$DIR/.venv/bin/python3" "$DIR/iqpilot/system/runtime_wheels_verify.py" || return 1
       printf '%s\n' "$RUNTIME_WHEEL_LOCK_SHA" > "$DIR/.iqpilot-runtime-wheel-lock-sha256"
     fi
+  fi
+  if [ ! -f "$DIR/prebuilt" ] && [ ! -x "$DIR/.venv/bin/python3" ]; then
+    return 1
   fi
   if [ -n "$VENV_SITE_PACKAGES" ]; then
     printf 'import site; site.addsitedir("%s")\n' "$BASE_SITE_PACKAGES" | sudo tee "$VENV_SITE_PACKAGES/iqpilot-system-venv.pth" >/dev/null

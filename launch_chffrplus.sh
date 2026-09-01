@@ -173,6 +173,9 @@ function launch {
   # for local dev edits or a failed apply-time prep, under the boot spinner as before.
   source "$DIR/artifacts/runtime/env_sync.sh"
   sync_python_env || return 1
+  if [ ! -f "$DIR/prebuilt" ] && [ ! -x "$DIR/.venv/bin/python3" ]; then
+    return 1
+  fi
   export PATH="$DIR/.venv/bin:$PATH"
 
   RUNTIME_COMPAT_ROOT="$DIR/.iqpilot/runtime_root"
