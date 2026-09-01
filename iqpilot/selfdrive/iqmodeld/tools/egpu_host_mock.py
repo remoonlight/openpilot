@@ -26,6 +26,10 @@ def activate(arch: str = DEFAULT_ARCH, execute: bool = False) -> None:
   tree = tinygrad_tree()
   if tree not in sys.path:
     sys.path.insert(0, tree)
+  from test.mockgpu.am import amgpu
+
+  # The mock dock models 512MB VRAM; big-model weights alone exceed that. Must be set before amdriver binds it.
+  amgpu.VRAM_SIZE = int(os.environ.get("IQ_MOCK_VRAM_GB", "4")) << 30
   from tinygrad.runtime.autogen import libc
   if sys.platform == "darwin":
     # A Homebrew-LLVM gfx1200 kernel (no s_code_end padding) hung a real dock; ship only container-built artifacts.

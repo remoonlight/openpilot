@@ -205,7 +205,7 @@ function launch {
     service_dropin="/run/systemd/system/${service_name}.service.d"
     service_exec="$(grep '^ExecStart=' "$service_src")"
     sudo mkdir -p "$service_dropin"
-    printf '[Service]\nWorkingDirectory=%s\nEnvironment="IQPILOT_SOURCE_ROOT=%s/iqpilot"\nEnvironment="IQPILOT_PROPRIETARY_ROOT=%s/artifacts"\nEnvironment="PYTHONPATH=/usr/libexec/iqpilot/python:%s:%s"\nExecStart=\n%s\n' "$RUNTIME_COMPAT_ROOT" "$DIR" "$DIR" "$VENV_SITE_PACKAGES" "$DIR" "$service_exec" | sudo tee "$service_dropin/iqpilot-packages.conf" >/dev/null
+    printf '[Service]\nWorkingDirectory=%s\nEnvironment="IQPILOT_SOURCE_ROOT=%s/iqpilot"\nEnvironment="IQPILOT_PROPRIETARY_ROOT=%s/artifacts"\nEnvironment="PYTHONPATH=%s"\nExecStart=\n%s\n' "$RUNTIME_COMPAT_ROOT" "$DIR" "$DIR" "$PYTHONPATH" "$service_exec" | sudo tee "$service_dropin/iqpilot-packages.conf" >/dev/null
     sudo systemctl daemon-reload
     if [ -f "$service_lib" ] && grep -q "/usr/libexec/iqpilot/iqpilot_bundle_runner" "$service_lib"; then
       if [ -f "$service_dst" ]; then
@@ -262,15 +262,18 @@ function launch {
   # start manager
   cd "$DIR/iqpilot/system/manager"
   export PWD="$(pwd)"
+  MANAGER_PYTHON="$DIR/.venv/bin/python3"
   if [ ! -f $DIR/prebuilt ]; then
     if pkill -f /tmp/installer 2>/dev/null; then sleep 1; fi
-    "$DIR/.venv/bin/python3" ./build.py
+    "$MANAGER_PYTHON" ./build.py
     for service_name in hephaestusd ble-transportd flockd; do
       sudo systemctl restart --no-block "${service_name}.service"
     done
+  else
+    MANAGER_PYTHON="/usr/local/venv/bin/python3"
   fi
 
-  "$DIR/.venv/bin/python3" ./manager.py
+  "$MANAGER_PYTHON" ./manager.py
 
   # if broken, keep on screen error
   while true; do sleep 1; done
