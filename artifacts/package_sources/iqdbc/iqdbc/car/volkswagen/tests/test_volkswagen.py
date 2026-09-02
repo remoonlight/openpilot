@@ -434,3 +434,80 @@ def test_meb_does_not_infer_mqb_cluster_from_address(platform):
   fingerprints[0][0x30B] = 8
   params = CarInterface.get_params(platform, fingerprints, [], alpha_long=False, is_release=False, docs=False)
   assert not params.flags & VolkswagenFlags.KOMBI_PRESENT
+
+
+
+def _subscribed_addresses(car, updates=5):
+  nanos = 0
+  for _ in range(updates):
+    nanos += int(DT_CTRL * 1e9)
+    car.update([(nanos, [])])
+  return {bus: set(parser.addresses) for bus, parser in car.can_parsers.items()}
+
+
+def _frames_for(car, packer, subscribed):
+  frames = []
+  for bus, parser in car.can_parsers.items():
+    for addr in sorted(subscribed[bus]):
+      frames.append(packer.make_can_msg(parser.dbc.addr_to_msg[addr].name, parser.bus, {}))
+  return frames
+
+
+def _run_past_aliveness_timeout(car, build, seconds=15.0):
+  nanos = 0
+  ret = None
+  for _ in range(int(seconds / DT_CTRL)):
+    nanos += int(DT_CTRL * 1e9)
+    ret, _ = car.update([(nanos, build())])
+  return ret
+
+
+def _sparse_q5(car_fw=(), bus1=()):
+  fingerprints = _mlb_fingerprint(0, MLB_ECAN_GATEWAY_NO_GEARBOX)
+  fingerprints[1] = {msg: 8 for msg in bus1}
+  fingerprints[2] = {msg: 8 for msg in MLB_ECAN_CAMERA}
+  CP = CarInterface.get_params(CAR.AUDI_Q5_MK1, fingerprints, list(car_fw), alpha_long=False, is_release=False, docs=False)
+  CP_IQ = CarInterface.get_params_iq(CP, CAR.AUDI_Q5_MK1, fingerprints, list(car_fw), alpha_long=False, is_release_iq=False, docs=False)
+  return CarInterface(CP, CP_IQ)
+
+
+@pytest.mark.parametrize("car_fw", (
+  (),
+  (CarParams.CarFw.new_message(ecu=Ecu.transmission, address=0x7e1),),
+), ids=("no_fw", "transmission_fw"))
+def test_mlb_gateway_car_with_a_sparse_fingerprint_snapshot_reads_only_what_an_automatic_reads(car_fw):
+  automatic = _subscribed_addresses(_q5_mk1_car())
+  assert all(MLB_MSG_GATEWAY_05 not in addrs for addrs in automatic.values())
+
+  q5 = _sparse_q5(car_fw)
+  packer = CANPacker("vw_mlb")
+  ret = _run_past_aliveness_timeout(q5, lambda: _frames_for(q5, packer, automatic))
+
+  assert ret.canValid
+  assert all(parser.can_valid for parser in q5.can_parsers.values())
+  assert not any(parser.bus_timeout for parser in q5.can_parsers.values())
+  assert {bus: set(parser.addresses) for bus, parser in q5.can_parsers.items()} == automatic
+  assert q5.CP.transmissionType == CarParams.TransmissionType.automatic
+
+
+def test_mlb_manual_gateway_car_adds_only_the_reverse_switch_on_the_powertrain_bus():
+  automatic = _subscribed_addresses(_q5_mk1_car())
+  manual = _subscribed_addresses(_sparse_q5(bus1=(MLB_MSG_GATEWAY_05,)))
+
+  assert manual[Bus.pt] == automatic[Bus.pt]
+  assert manual[Bus.cam] == automatic[Bus.cam]
+  assert manual[Bus.aux] == automatic[Bus.aux] | {MLB_MSG_GATEWAY_05}
+
+
+@pytest.mark.parametrize("build", (_a4_mk4_car, _q5_mk1_car), ids=("a4_mk4", "q5_mk1"))
+def test_mlb_carstate_subscriptions_settle_and_stay_alive(build):
+  car = build()
+  subscribed = _subscribed_addresses(car)
+
+  packer = CANPacker("vw_mlb")
+  ret = _run_past_aliveness_timeout(car, lambda: _frames_for(car, packer, subscribed))
+
+  assert {bus: set(parser.addresses) for bus, parser in car.can_parsers.items()} == subscribed
+  assert ret.canValid
+  assert all(parser.can_valid for parser in car.can_parsers.values())
+  assert not any(parser.bus_timeout for parser in car.can_parsers.values())

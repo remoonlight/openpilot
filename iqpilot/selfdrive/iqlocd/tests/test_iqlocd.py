@@ -112,3 +112,61 @@ class TestIQLocdProc:
     assert lastGPS['latitude'] == pytest.approx(self.lat, abs=0.001)
     assert lastGPS['longitude'] == pytest.approx(self.lon, abs=0.001)
     assert lastGPS['altitude'] == pytest.approx(self.alt, abs=0.2)
+
+  def _well_formed_burst(self, t0, frames=60):
+    published = 0
+    for i in range(frames):
+      t = t0 + i * 50_000_000
+      for name in self.LLD_MSGS:
+        self.pm.send(name, self.get_msg(name, t))
+      self.pm.wait_for_readers_to_update("cameraOdometry", 0.1, dt=0.005)
+      self.sm.update(0)
+      published += int(self.sm.updated["iqLiveLocation"])
+    return t0 + frames * 50_000_000, published
+
+  def _malformed(self, case, t):
+    if case in ("odometry_short", "odometry_empty", "odometry_nan", "odometry_nan_std"):
+      msg = messaging.new_message("cameraOdometry")
+      odo = msg.cameraOdometry
+      if case == "odometry_short":
+        odo.rot = [0.0] * 6; odo.trans = [0.0] * 6; odo.rotStd = [0.01] * 6; odo.transStd = [0.01] * 6
+      elif case == "odometry_nan":
+        odo.rot = [float("nan"), 0.0, 0.0]; odo.trans = [0.0] * 3; odo.rotStd = [0.01] * 3; odo.transStd = [0.01] * 3
+      elif case == "odometry_nan_std":
+        odo.rot = [0.0] * 3; odo.trans = [0.0] * 3; odo.rotStd = [float("nan"), 0.01, 0.01]; odo.transStd = [0.01] * 3
+    elif case in ("calibration_short", "calibration_nan"):
+      msg = messaging.new_message("extrinsicsCalibration")
+      msg.extrinsicsCalibration.calStatus = "calibrated"
+      msg.extrinsicsCalibration.rpyCalib = [0.0, 0.0] if case == "calibration_short" else [float("nan"), 0.0, 0.0]
+    elif case in ("gps_short", "gps_nan"):
+      msg = self.get_msg("gpsLocationExternal", t)
+      msg.gpsLocationExternal.vNED = [0.0, 0.0] if case == "gps_short" else [float("nan"), 0.0, 0.0]
+    elif case == "gyro_nan":
+      msg = self.get_msg("gyroscope", t)
+      msg.gyroscope.gyroUncalibrated.v = [float("nan"), 0.0, 0.0]
+    elif case == "accel_short":
+      msg = self.get_msg("accelerometer", t)
+      msg.accelerometer.acceleration.v = [0.0, 0.0]
+    msg.logMonoTime = t
+    msg.valid = True
+    return msg
+
+  @pytest.mark.parametrize("case", (
+    "odometry_short", "odometry_empty", "odometry_nan", "odometry_nan_std",
+    "calibration_short", "calibration_nan", "gps_short", "gps_nan", "gyro_nan", "accel_short",
+  ))
+  def test_malformed_input_does_not_kill_the_process(self, case):
+    random.seed(1)
+    self.x, self.y, self.z = -2710700.0, -4280600.0, 3850300.0
+    self.lat, self.lon, self.alt = ecef2geodetic([self.x, self.y, self.z])
+
+    t, _ = self._well_formed_burst(int(1e9))
+    assert self.proc.poll() is None
+
+    msg = self._malformed(case, t)
+    self.pm.send(msg.which(), msg)
+    time.sleep(0.05)
+    _, published = self._well_formed_burst(t + 50_000_000)
+
+    assert self.proc.poll() is None, f"iqlocd died on {case} with {self.proc.returncode}"
+    assert published >= 30

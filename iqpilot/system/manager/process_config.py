@@ -248,7 +248,7 @@ procs += [
   PythonProcess("mapd_manager", "iqpilot.iq_maps.orchestrator", and_(only_offroad, not_low_power)),
 
   # locationd
-  NativeProcess("iqlocd", "iqpilot/selfdrive/iqlocd", ["./iqlocd"], only_onroad),
+  NativeProcess("iqlocd", "iqpilot/selfdrive/iqlocd", ["./iqlocd"], only_onroad, restart_if_crash=True),
 ]
 
 managed_processes = {p.name: p for p in procs}

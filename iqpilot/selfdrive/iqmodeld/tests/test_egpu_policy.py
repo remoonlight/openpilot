@@ -80,3 +80,82 @@ def test_layouts():
   assert sum(sizes) == 8 + 2 + 2 + 512
   q = queue_shapes(SPEC, FS)
   assert q["img_q"][0] == (5, 6, 8, 16) and q["feat_q"][0] == (96, 1, 512) and q["desire_q"][0] == (100, 1, 8)
+
+
+CAM = (64, 48)
+
+
+def _nv12(cam_w, cam_h):
+  from iqpilot.system.camerad.cameras.nv12_info import get_nv12_info
+  stride, y_height, uv_height, _ = get_nv12_info(cam_w, cam_h)
+  return (cam_w, cam_h, stride, y_height, uv_height)
+
+
+def _numpy_warp_plane(src, m, w_dst, h_dst):
+  h_src, w_src = src.shape
+  x = np.tile(np.arange(w_dst, dtype=np.float32), h_dst)
+  y = np.repeat(np.arange(h_dst, dtype=np.float32), w_dst)
+  sx = (m[0, 0] * x + m[0, 1] * y + m[0, 2]) / (m[2, 0] * x + m[2, 1] * y + m[2, 2])
+  sy = (m[1, 0] * x + m[1, 1] * y + m[1, 2]) / (m[2, 0] * x + m[2, 1] * y + m[2, 2])
+  xi = np.clip(np.round(sx), 0, w_src - 1).astype(np.int64)
+  yi = np.clip(np.round(sy), 0, h_src - 1).astype(np.int64)
+  return src[yi, xi].reshape(h_dst, w_dst)
+
+
+def _numpy_frame_prepare(frame, m, nv12, model_w, model_h):
+  cam_w, cam_h, stride, y_height, uv_height = nv12
+  m = m.astype(np.float32)
+  y_src = frame[:cam_h * stride].reshape(cam_h, stride)
+  uv = frame[stride * y_height:stride * y_height + uv_height * stride].reshape(uv_height, stride)
+  m_uv = m * np.array([[1.0, 1.0, 0.5], [1.0, 1.0, 0.5], [2.0, 2.0, 1.0]], dtype=np.float32)
+  y = _numpy_warp_plane(y_src, m, model_w, model_h)
+  u = _numpy_warp_plane(uv[:cam_h // 2, :cam_w:2], m_uv, model_w // 2, model_h // 2)
+  v = _numpy_warp_plane(uv[:cam_h // 2, 1:cam_w:2], m_uv, model_w // 2, model_h // 2)
+  f = np.concatenate([y.ravel(), u.ravel(), v.ravel()]).reshape(model_h * 3 // 2, model_w)
+  H, W = model_h, model_w
+  return np.stack([f[0:H:2, 0::2], f[1:H:2, 0::2], f[0:H:2, 1::2], f[1:H:2, 1::2],
+                   f[H:H + H // 4].reshape(H // 2, W // 2), f[H + H // 4:H + H // 2].reshape(H // 2, W // 2)])
+
+
+def _jittered_scale(rng, cam, model_w, model_h):
+  m = np.array([[cam[0] / model_w, 0.0, 0.0], [0.0, cam[1] / model_h, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+  m += (0.05 * rng.standard_normal((3, 3))).astype(np.float32) * np.array([[1, 1, 1], [1, 1, 1], [0.01, 0.01, 0.1]], dtype=np.float32)
+  return m
+
+
+def test_frame_layout():
+  from iqpilot.selfdrive.iqmodeld.egpu_policy import frame_layout, model_size, nv12_copy_size
+  shapes, sizes, npy_bytes = frame_layout(SPEC)
+  assert list(shapes) == ["tfm", "big_tfm", "desire", "traffic_convention", "action_t", "prev_feat"]
+  assert npy_bytes == (18 + 8 + 2 + 2 + 512) * 4
+  assert model_size(SPEC) == (32, 16)
+  assert nv12_copy_size(128, 64, 32) == 128 * 96
+
+
+def test_model_runner_matches_device_warp():
+  from tinygrad.engine.jit import TinyJit
+
+  from iqpilot.selfdrive.iqmodeld.egpu_policy import ModelRunner, make_run_model, make_warp, model_size, nv12_copy_size
+  nv12 = _nv12(*CAM)
+  fcs = nv12_copy_size(nv12[2], nv12[3], nv12[4])
+  model_w, model_h = model_size(SPEC)
+  run_policy = make_run_policy(_fake_model, SPEC, FS, "CPU")
+  jit = TinyJit(make_run_model(make_warp(nv12, model_w, model_h, "CPU"), run_policy, SPEC, fcs, "CPU"), prune=True)
+  runner = ModelRunner(jit, SPEC, FS, HIDDEN, "CPU", fcs)
+  ref = PolicyRunner(TinyJit(make_run_policy(_fake_model, SPEC, FS, "CPU"), prune=True), SPEC, FS, HIDDEN, "CPU")
+  rng = np.random.default_rng(7)
+  desire = np.zeros(8, dtype=np.float32)
+  for i in range(10):
+    main = rng.integers(0, 256, fcs, dtype=np.int64).astype(np.uint8)
+    extra = rng.integers(0, 256, fcs, dtype=np.int64).astype(np.uint8)
+    tfm = _jittered_scale(rng, CAM, model_w, model_h)
+    big_tfm = _jittered_scale(rng, CAM, model_w, model_h)
+    if i in (2, 6):
+      desire[:] = 0
+      desire[1 + i % 3] = 1
+    traffic = np.array([1.0, 0.0], dtype=np.float32) if i % 2 else np.array([0.0, 1.0], dtype=np.float32)
+    action_t = np.array([0.1 * i, 0.2], dtype=np.float32)
+    got = runner.run(main, extra, tfm, big_tfm, desire, traffic, action_t)
+    warped = np.stack([_numpy_frame_prepare(main, tfm, nv12, model_w, model_h), _numpy_frame_prepare(extra, big_tfm, nv12, model_w, model_h)])
+    want = ref.run(warped, desire, traffic, action_t)
+    np.testing.assert_array_equal(got, want, err_msg=f"frame {i}")

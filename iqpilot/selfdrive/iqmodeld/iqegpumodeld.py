@@ -39,16 +39,17 @@ from iqpilot.selfdrive.iqmodeld.driving_action import (
   DESIRE_LEN, LAT_SMOOTH_SECONDS, LONG_SMOOTH_SECONDS, get_action_from_model,
 )
 from iqpilot.selfdrive.iqmodeld.egpu_helpers import (
-  download_onnx, download_precompiled, egpu_oob_pkl_path, egpu_pkl_path, egpu_policy_pkl_path, egpu_present_consented, egpu_selected, local_onnx,
+  download_onnx, download_precompiled, egpu_model_oob_pkl_path, egpu_oob_pkl_path, egpu_pkl_path, egpu_policy_pkl_path, egpu_present_consented,
+  egpu_selected, local_onnx,
   patch_tinygrad_fetch_fw, quarantine_artifact, resolve_backend, usbgpu_present,
 )
 from iqpilot.selfdrive.iqmodeld.egpu_model import resolve_egpu_model
-from iqpilot.selfdrive.iqmodeld.egpu_pipeline import EgpuPipeline, EgpuPipelineError, make_big_channel_payload
+from iqpilot.selfdrive.iqmodeld.egpu_pipeline import EgpuOutputInvalid, EgpuPipeline, EgpuPipelineError, make_big_channel_payload
 from iqpilot.selfdrive.iqmodeld.egpu_telemetry import EgpuDockTelemetry
 from iqpilot.selfdrive.iqmodeld.messaging import DrivePacketMemory, populate_drive_messages, populate_odometry_message
 from iqpilot.selfdrive.iqmodeld.metadata import Meta20hz
 from iqpilot.selfdrive.iqmodeld.model_channel import BIG_CHANNEL, ModelChannel
-from iqpilot.selfdrive.iqmodeld.egpu_policy import POLICY_FORMAT, PolicyRunner, load_bundle
+from iqpilot.selfdrive.iqmodeld.egpu_policy import MODEL_FORMAT, POLICY_FORMAT, ModelRunner, PolicyRunner, load_bundle
 from iqpilot.selfdrive.iqmodeld.model_warp import FrameWarp
 from iqpilot.selfdrive.iqmodeld.parser import PhaseParser
 
@@ -62,6 +63,11 @@ MIN_LOAD_AVAIL_MB = 350
 MEMORY_WAIT_S = 90.0
 SETUP_RETRY_BASE_S = 3.0
 SETUP_RETRY_MAX_S = 30.0
+MAX_INVALID_STREAK = 20
+DOCK_MIN_SUPPLY_MV = 5000
+DOCK_POWER_STABLE_POLLS = 4
+DOCK_POWER_POLL_S = 0.1
+DOCK_POWER_TIMEOUT_S = 30.0
 
 
 def park(reason: str) -> None:
@@ -86,15 +92,53 @@ def _wait_for_egpu(params: Params) -> None:
   while time.monotonic() < deadline:
     try:
       if link_up():
-        return
+        break
     except Exception:
       return
     time.sleep(0.5)
+  _wait_for_dock_power(params)
 
 
-def _compile_in_subprocess(meta: dict, onnx_path: str, pkl_path: str) -> None:
+def dock_power_ready(reading) -> bool:
+  voltage, _current, fault = reading
+  return int(voltage) >= DOCK_MIN_SUPPLY_MV and not fault
+
+
+def _wait_for_dock_power(params: Params) -> None:
+  telemetry = EgpuDockTelemetry(None, big=False)
+  deadline = time.monotonic() + DOCK_POWER_TIMEOUT_S
+  stable = 0
+  warned = False
+  try:
+    while time.monotonic() < deadline:
+      try:
+        reading = telemetry._read_ina()
+      except Exception:
+        return
+      if reading is None:
+        return
+      stable = stable + 1 if dock_power_ready(reading) else 0
+      if stable >= DOCK_POWER_STABLE_POLLS:
+        return
+      if stable == 0 and not warned:
+        warned = True
+        cloudlog.warning(f"iqegpumodeld dock supply not ready {reading}; waiting for a stable 5V rail")
+        params.put("UsbGpuLastError", f"dock supply not ready (voltage={reading[0]}mV fault={reading[2]}); waiting")
+      time.sleep(DOCK_POWER_POLL_S)
+    cloudlog.warning("iqegpumodeld dock supply never stabilised; continuing")
+  finally:
+    handle = getattr(telemetry, "_asm_usb", None)
+    if handle is not None:
+      try:
+        handle.close()
+      except Exception:
+        pass
+
+
+def _compile_in_subprocess(meta: dict, onnx_path: str, pkl_path: str, cam_size: tuple[int, int]) -> None:
   cmd = [sys.executable, "-m", "iqpilot.selfdrive.iqmodeld.tools.compile_egpu_model",
          "--model", meta["key"], "--onnx", onnx_path, "--output", pkl_path,
+         "--format", str(MODEL_FORMAT), "--camera-resolutions", f"{cam_size[0]}x{cam_size[1]}",
          "--progress-param", "UsbGpuSetupProgress", "--progress-base", "0.5", "--progress-span", "0.48"]
   compile_env = {**os.environ, "DEV": "USB+AMD:LLVM", "FLOAT16": "1",
                  "JIT_BATCH_SIZE": "0", "GMMU": "0", "TC_OPT": "2"}
@@ -106,10 +150,36 @@ def _compile_in_subprocess(meta: dict, onnx_path: str, pkl_path: str) -> None:
 
 
 _precompiled_tried = False
+_model_precompiled_tried = False
 
 
-def _ensure_artifact(params: Params, meta: dict) -> str:
-  global _precompiled_tried
+def _ensure_artifact(params: Params, meta: dict, cam_size: tuple[int, int]) -> str:
+  global _precompiled_tried, _model_precompiled_tried
+  model_path = egpu_model_oob_pkl_path(meta)
+  if os.path.isfile(model_path):
+    return model_path
+  if meta.get("egpu_model_oob_artifact") and not _model_precompiled_tried:
+    _model_precompiled_tried = True
+    params.put_bool("UsbGpuCompiled", False)
+    params.put_bool("UsbGpuReady", False)
+    params.put("UsbGpuSetupProgress", "0.0")
+    model_last = [-1.0]
+
+    def _model_prog(p: float) -> None:
+      if p - model_last[0] >= 0.02 or p >= 1.0:
+        model_last[0] = p
+        params.put("UsbGpuSetupProgress", f"{p:.3f}")
+
+    try:
+      size_mb = int(meta["egpu_model_oob_artifact"].get("size", 0)) / 1e6
+      cloudlog.warning(f"iqegpumodeld downloading precompiled {meta['key']} (warp-on-dock, {size_mb:.0f}MB)")
+      precompiled = download_precompiled(meta, progress_cb=_model_prog, field="egpu_model_oob_artifact")
+      if precompiled is not None:
+        cloudlog.warning(f"iqegpumodeld precompiled ready -> {precompiled}")
+        return precompiled
+    except Exception as e:
+      cloudlog.warning(f"iqegpumodeld warp-on-dock artifact unavailable ({e}); falling back")
+
   oob_path = egpu_oob_pkl_path(meta)
   if os.path.isfile(oob_path):
     return oob_path
@@ -179,10 +249,10 @@ def _ensure_artifact(params: Params, meta: dict) -> str:
 
     onnx_path = download_onnx(meta, progress_cb=_prog)
 
-  cloudlog.warning(f"iqegpumodeld compiling {meta['key']} for USB-AMD (one-time, can take minutes)")
-  _compile_in_subprocess(meta, onnx_path, policy_path)
-  cloudlog.warning(f"iqegpumodeld compiled -> {policy_path}")
-  return policy_path
+  cloudlog.warning(f"iqegpumodeld compiling {meta['key']} for USB-AMD ({cam_size[0]}x{cam_size[1]}, one-time, can take minutes)")
+  _compile_in_subprocess(meta, onnx_path, model_path, cam_size)
+  cloudlog.warning(f"iqegpumodeld compiled -> {model_path}")
+  return model_path
 
 
 def _mem_available_mb() -> int:
@@ -207,7 +277,7 @@ def _wait_for_memory(need_mb: int) -> None:
     raise RuntimeError(f"insufficient memory to load the dock model: {avail}MB available, need {need_mb}MB")
 
 
-def _load_infer_fn(pkl_path: str, meta: dict):
+def _load_infer_fn(pkl_path: str, meta: dict, cam_size: tuple[int, int]):
   patch_tinygrad_fetch_fw()
   from tinygrad.tensor import Tensor
 
@@ -219,6 +289,14 @@ def _load_infer_fn(pkl_path: str, meta: dict):
   if int(bundle.get("output_len", -1)) != int(meta["output_len"]):
     quarantine_artifact(pkl_path, "pkl output_len mismatch")
     raise RuntimeError(f"artifact output_len {bundle.get('output_len')} != {meta['output_len']}")
+  if bundle.get("format") == MODEL_FORMAT:
+    jits = bundle["run_model"]
+    if cam_size not in jits:
+      have = ", ".join(f"{w}x{h}" for w, h in sorted(jits))
+      raise RuntimeError(f"artifact has no warp for the {cam_size[0]}x{cam_size[1]} camera (bundled: {have})")
+    runner = ModelRunner(jits[cam_size], bundle["input_spec"], int(bundle["frame_skip"]), meta["output_slices"]["hidden_state"],
+                         bundle.get("input_device", "AMD"), int(bundle["frame_copy_size"][cam_size]))
+    return runner, bundle["input_spec"]
   if bundle.get("format") == POLICY_FORMAT:
     runner = PolicyRunner(bundle["run_policy"], bundle["input_spec"], int(bundle["frame_skip"]),
                           meta["output_slices"]["hidden_state"], bundle.get("input_device", "AMD"))
@@ -239,7 +317,12 @@ def _load_infer_fn(pkl_path: str, meta: dict):
 def _warmup(infer_fn, input_spec: dict, output_len: int) -> float:
   zeros = {name: np.zeros(shape, dtype=dtype) for name, (shape, dtype) in input_spec.items()}
   t0 = time.perf_counter()
-  if isinstance(infer_fn, PolicyRunner):
+  if isinstance(infer_fn, ModelRunner):
+    n = infer_fn.frame_copy_size
+    eye = np.eye(3, dtype=np.float32)
+    out = infer_fn.run(np.zeros(n, dtype=np.uint8), np.zeros(n, dtype=np.uint8), eye, eye,
+                       np.zeros(input_spec["desire_pulse"][0][2], dtype=np.float32), np.zeros(2, dtype=np.float32), np.zeros(2, dtype=np.float32))
+  elif isinstance(infer_fn, PolicyRunner):
     img = input_spec["img"][0]
     out = infer_fn.run(np.zeros((2, 6, img[2], img[3]), dtype=np.uint8), np.zeros(input_spec["desire_pulse"][0][2], dtype=np.float32),
                        np.zeros(2, dtype=np.float32), np.zeros(2, dtype=np.float32))
@@ -284,9 +367,10 @@ def main(demo: bool = False) -> None:
       if meta.get("split"):
         params.put_bool("UsbGpuLoading", False)
         park(f"model {meta['key']} needs the Mac backend; the eGPU runs fused models only")
-      warp = FrameWarp(cameras._primary.width, cameras._primary.height, meta["frame_skip"])
-      pkl_path = _ensure_artifact(params, meta)
-      infer_fn, input_spec = _load_infer_fn(pkl_path, meta)
+      cam_size = (int(cameras._primary.width), int(cameras._primary.height))
+      pkl_path = _ensure_artifact(params, meta, cam_size)
+      infer_fn, input_spec = _load_infer_fn(pkl_path, meta, cam_size)
+      warp = None if isinstance(infer_fn, ModelRunner) else FrameWarp(cam_size[0], cam_size[1], meta["frame_skip"])
       warm_s = _warmup(infer_fn, input_spec, meta["output_len"])
       break
     except Exception as e:
@@ -312,7 +396,7 @@ def main(demo: bool = False) -> None:
   params.put_bool("UsbGpuReady", True)
   params.put("UsbGpuSetupProgress", "1.0")
   cloudlog.warning(f"iqegpumodeld model: {meta['key']} ({meta['model_name']})")
-  cloudlog.warning(f"iqegpumodeld model up (warmup {warm_s * 1e3:.0f}ms)")
+  cloudlog.warning(f"iqegpumodeld model up (warmup {warm_s * 1e3:.0f}ms, {'warp on dock' if warp is None else 'warp on device'})")
 
   pipeline = EgpuPipeline(meta, infer_fn)
   telemetry_pm = messaging.PubMaster(["egpuDockState"])
@@ -339,6 +423,7 @@ def main(demo: bool = False) -> None:
   stats: dict[str, list[float]] = {k: [] for k in ("pull", "warp", "infer", "publish", "loop")}
   iter_count = 0
   skip_count = 0
+  invalid_streak = 0
   last_pulled_fid = -1
   last_frame_mono = time.monotonic()
   t_loop = time.perf_counter()
@@ -394,20 +479,34 @@ def main(demo: bool = False) -> None:
     action_t = np.array([lat_action_t, long_action_t], dtype=np.float32)
 
     started_at = time.perf_counter()
+    t_warp = started_at
     try:
-      warped = warp.run(main_buf, extra_buf, main_tfm, extra_tfm)
-    except Exception as e:
-      park(f"warp run failed: {e}")
-    t_warp = time.perf_counter()
-    stats["warp"].append(t_warp - started_at)
-
-    try:
-      output = pipeline.run(warped, desire_vec, traffic, action_t)
+      if warp is None:
+        output = pipeline.run_frames(main_buf.data, extra_buf.data, main_tfm, extra_tfm, desire_vec, traffic, action_t)
+      else:
+        try:
+          warped = warp.run(main_buf, extra_buf, main_tfm, extra_tfm)
+        except Exception as e:
+          park(f"warp run failed: {e}")
+        t_warp = time.perf_counter()
+        output = pipeline.run(warped, desire_vec, traffic, action_t)
+    except EgpuOutputInvalid as e:
+      invalid_streak += 1
+      if invalid_streak == 1 or invalid_streak % MAX_INVALID_STREAK == 0:
+        cloudlog.warning(f"iqegpumodeld dropping frame {main_stamp.frame_id}: {e} (streak {invalid_streak})")
+      if invalid_streak >= MAX_INVALID_STREAK:
+        params.put("UsbGpuLastError", f"{e} for {invalid_streak} consecutive frames"[:512])
+        cloudlog.error(f"iqegpumodeld output invalid for {invalid_streak} frames; exiting for a clean restart")
+        sys.exit(1)
+      frame_meter.commit(main_stamp.frame_id)
+      continue
     except EgpuPipelineError as e:
       park(str(e))
     except Exception as e:
       park(f"eGPU inference failed: {e}")
+    invalid_streak = 0
     t_infer = time.perf_counter()
+    stats["warp"].append(t_warp - started_at)
     stats["infer"].append(t_infer - t_warp)
 
     execution_time = time.perf_counter() - started_at
@@ -431,6 +530,7 @@ def main(demo: bool = False) -> None:
     )
 
     model_msg.modelV2.big = True
+    driving_msg.drivingModelData.big = True
 
     desire_state = model_msg.modelV2.meta.desireState
     lane_change_prob = desire_state[log.Desire.laneChangeLeft] + desire_state[log.Desire.laneChangeRight]

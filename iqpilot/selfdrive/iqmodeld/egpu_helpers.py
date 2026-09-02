@@ -71,6 +71,11 @@ def egpu_oob_pkl_path(meta: dict) -> str:
   return os.path.join(Paths.model_root(), f"egpu_{meta['key']}_{meta['sha256'][:8]}_amd_policy_oob.pkl")
 
 
+def egpu_model_oob_pkl_path(meta: dict) -> str:
+  from iqpilot.system.hardware.hw import Paths
+  return os.path.join(Paths.model_root(), f"egpu_{meta['key']}_{meta['sha256'][:8]}_amd_model_oob.pkl")
+
+
 def onnx_cache_path(meta: dict) -> str:
   from iqpilot.system.hardware.hw import Paths
   return os.path.join(Paths.model_root(), f"{meta['model_name']}_{meta['sha256'][:8]}.onnx")
@@ -156,13 +161,21 @@ def download_onnx(meta: dict, progress_cb=None) -> str:
   return path
 
 
-def download_precompiled(meta: dict, progress_cb=None, policy: bool = False, oob: bool = False) -> str | None:
-  field = "egpu_oob_artifact" if oob else "egpu_policy_artifact" if policy else "egpu_artifact"
+ARTIFACT_PATHS = {
+  "egpu_model_oob_artifact": egpu_model_oob_pkl_path,
+  "egpu_oob_artifact": egpu_oob_pkl_path,
+  "egpu_policy_artifact": egpu_policy_pkl_path,
+  "egpu_artifact": egpu_pkl_path,
+}
+
+
+def download_precompiled(meta: dict, progress_cb=None, policy: bool = False, oob: bool = False, field: str | None = None) -> str | None:
+  field = field or ("egpu_oob_artifact" if oob else "egpu_policy_artifact" if policy else "egpu_artifact")
   art = meta.get(field)
   if not art or not (art.get("objects") or art.get("hf_path")):
     return None
   from iqpilot.selfdrive.iqmodeld.model_bundle_downloader import download_hf_file, download_lfs_bundle
-  dest = egpu_oob_pkl_path(meta) if oob else egpu_policy_pkl_path(meta) if policy else egpu_pkl_path(meta)
+  dest = ARTIFACT_PATHS[field](meta)
   if art.get("hf_path"):
     try:
       return download_hf_file(art["hf_path"], dest, art["sha256"], int(art.get("size", 0)), progress_cb=progress_cb)

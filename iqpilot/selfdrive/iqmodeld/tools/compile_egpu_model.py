@@ -157,23 +157,32 @@ def _policy_frame(seed: int, input_spec: dict):
   return warped
 
 
-def _tc_off_reference(onnx_path: str, meta: dict):
+def _tc_off_reference(onnx_path: str, meta: dict, fmt: int = 2, resolutions: tuple[tuple[int, int], ...] = ()):
   """Compile+run the model with tensor cores OFF in a child process and return the last of 3
   policy frames. This is the trusted reference: TC-off kernels are the conservative path the
   eMac gate also trusts. Used to catch a TC kernel miscompile that would bias steering."""
   import subprocess
   import tempfile
   with tempfile.TemporaryDirectory() as td:
-    ref = os.path.join(td, "ref.npy")
+    ref = os.path.join(td, "ref.npz" if fmt == 3 else "ref.npy")
     env = {k: v for k, v in os.environ.items() if k not in ("TC_OPT", "BEAM")}
     env["TC_OPT"] = "0"
     env["IQ_EGPU_REFERENCE"] = ref
-    r = subprocess.run([sys.executable, "-m", "iqpilot.selfdrive.iqmodeld.tools.compile_egpu_model",
-                        "--model", meta["key"], "--onnx", onnx_path, "--tc-off"],
-                       env=env, capture_output=True, text=True, timeout=14400)
+    cmd = [sys.executable, "-m", "iqpilot.selfdrive.iqmodeld.tools.compile_egpu_model",
+           "--model", meta["key"], "--onnx", onnx_path, "--tc-off", "--format", str(fmt)]
+    if resolutions:
+      cmd += ["--camera-resolutions", *(f"{w}x{h}" for w, h in resolutions)]
+    r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=14400)
     if r.returncode != 0 or not os.path.isfile(ref):
       raise RuntimeError(f"parity reference compile failed:\n{r.stderr[-2000:]}")
     return np.load(ref)
+
+
+def _parity_check(key: str, got: np.ndarray, ref: np.ndarray, label: str = "") -> None:
+  rel = float(np.abs(got - ref).mean() / max(1e-3, float(np.abs(ref).mean())))
+  if rel > 0.01:
+    raise _ParityFail(f"PARITY FAIL: TC kernels miscompiled {key} {label}(rel={rel:.4f} vs TC-off); recompiling with tensor cores disabled")
+  print(f"  parity vs TC-off reference {label}: rel={rel:.6f} OK")
 
 
 def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
@@ -259,14 +268,136 @@ def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
   _validate_pose_outputs(PhaseParser().parse_vision_outputs(_slice_outputs(outs[-1], meta["output_slices"])))
 
   if os.environ.get("TC_OPT") != "0" and not os.environ.get("IQ_EGPU_SKIP_PARITY"):
-    ref = _tc_off_reference(onnx_path, meta)
-    rel = float(np.abs(outs[-1] - ref).mean() / max(1e-3, float(np.abs(ref).mean())))
-    if rel > 0.01:
-      raise _ParityFail(f"PARITY FAIL: TC kernels miscompiled {meta['key']} (rel={rel:.4f} vs TC-off); recompiling with tensor cores disabled")
-    print(f"  parity vs TC-off reference: rel={rel:.6f} OK")
+    _parity_check(meta["key"], outs[-1], _tc_off_reference(onnx_path, meta))
 
   os.replace(tmp, out_path)
   return out_path
+
+
+DEFAULT_CAMERA_RESOLUTIONS: tuple[tuple[int, int], ...] = ((1928, 1208), (1344, 760))
+
+
+def camera_nv12(cam_w: int, cam_h: int) -> tuple[int, int, int, int, int]:
+  from iqpilot.system.camerad.cameras.nv12_info import get_nv12_info
+  stride, y_height, uv_height, _ = get_nv12_info(cam_w, cam_h)
+  return (cam_w, cam_h, stride, y_height, uv_height)
+
+
+def _fill_model_frame(packed, seed: int, res: tuple[int, int], model_w: int, model_h: int) -> None:
+  rng = np.random.default_rng(seed)
+  cam_w, cam_h = res
+  scale = np.array([[cam_w / model_w, 0.0, 0.0], [0.0, cam_h / model_h, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+  for name in ("tfm", "big_tfm"):
+    packed.views[name][:, :] = scale * (1.0 + 0.02 * rng.standard_normal((3, 3))).astype(np.float32)
+  for v in packed.frames.values():
+    v[:] = rng.integers(0, 256, size=v.shape, dtype=np.uint8)
+  packed.views["traffic_convention"][:] = [1, 0]
+  packed.views["action_t"][:] = [0.2, 0.3]
+
+
+def compile_model_v3(meta: dict, onnx_path: str, out_path: str,
+                     resolutions: tuple[tuple[int, int], ...] = DEFAULT_CAMERA_RESOLUTIONS) -> str:
+  from tinygrad.device import Device
+  from tinygrad.engine.jit import TinyJit
+  from tinygrad.nn.onnx import OnnxRunner
+
+  from iqpilot.selfdrive.iqmodeld.egpu_policy import (
+    MODEL_FORMAT, dump_oob, load_bundle, make_model_queues, make_run_model, make_run_policy, make_warp, model_size, nv12_copy_size,
+  )
+
+  if meta.get("split"):
+    raise RuntimeError(f"model {meta['key']} is a split model; eGPU compiles fused models only")
+  input_spec = {name: (tuple(shape), dtype) for name, (shape, dtype) in INPUT_SPEC.items()}
+  frame_skip = int(meta["frame_skip"])
+  hidden = meta["output_slices"]["hidden_state"]
+  device = Device.DEFAULT
+  model_w, model_h = model_size(input_spec)
+  runner = OnnxRunner(onnx_path)
+  run_policy = make_run_policy(runner, input_spec, frame_skip, device)
+
+  def step(jit, queues, packed, seed: int, res: tuple[int, int]) -> np.ndarray:
+    _fill_model_frame(packed, seed, res, model_w, model_h)
+    st = time.perf_counter()
+    out, = jit(**queues)
+    flat = out.numpy().reshape(-1)
+    print(f"  model step(seed={seed}, {res[0]}x{res[1]}) {(time.perf_counter() - st) * 1e3:6.1f} ms")
+    packed.views["prev_feat"][:] = flat[hidden].reshape(packed.views["prev_feat"].shape)
+    return flat
+
+  def run_three(jit, fcs: int, res: tuple[int, int]) -> list[np.ndarray]:
+    queues, packed = make_model_queues(input_spec, frame_skip, device, fcs)
+    return [step(jit, queues, packed, SEED + i, res) for i in range(3)]
+
+  jits: dict[tuple[int, int], object] = {}
+  sizes: dict[tuple[int, int], int] = {}
+  nv12s: dict[tuple[int, int], tuple[int, int, int, int, int]] = {}
+  baselines: dict[tuple[int, int], np.ndarray] = {}
+  for res in resolutions:
+    nv12 = camera_nv12(*res)
+    fcs = nv12_copy_size(nv12[2], nv12[3], nv12[4])
+    jit = TinyJit(make_run_model(make_warp(nv12, model_w, model_h, device), run_policy, input_spec, fcs, device), prune=True)
+    print(f"capture + replay {res[0]}x{res[1]} (frame copy {fcs} B)")
+    baseline = run_three(jit, fcs, res)[-1]
+    if baseline.shape[0] != meta["output_len"]:
+      raise RuntimeError(f"model output length {baseline.shape[0]} != registry {meta['output_len']}")
+    if not HOST and not np.isfinite(baseline).all():
+      raise RuntimeError("compiled model produced non-finite outputs")
+    jits[res], sizes[res], nv12s[res], baselines[res] = jit, fcs, nv12, baseline
+
+  bundle = {
+    "format": MODEL_FORMAT,
+    "run_model": jits,
+    "frame_copy_size": sizes,
+    "nv12": nv12s,
+    "model_key": meta["key"],
+    "model_sha256": meta["sha256"],
+    "output_len": int(meta["output_len"]),
+    "frame_skip": frame_skip,
+    "input_spec": input_spec,
+    "input_device": device,
+  }
+  os.makedirs(os.path.dirname(out_path), exist_ok=True)
+  tmp = out_path + ".part"
+  print("serialize (out-of-band buffers)")
+  with open(tmp, "wb") as f:
+    dump_oob(bundle, f)
+
+  del bundle, jits, run_policy, runner
+  gc.collect()
+
+  print("reload + validate")
+  loaded = load_bundle(tmp)
+  outs = {res: run_three(loaded["run_model"][res], loaded["frame_copy_size"][res], res) for res in resolutions}
+  ref_target = os.environ.get("IQ_EGPU_REFERENCE")
+  if ref_target:
+    np.savez(ref_target, **{f"{w}x{h}": outs[(w, h)][-1] for (w, h) in resolutions})
+    return out_path
+  if HOST:
+    os.replace(tmp, out_path)
+    return out_path
+  for res in resolutions:
+    if not np.array_equal(outs[res][-1], baselines[res]):
+      raise RuntimeError(f"model outputs differ from baseline after pickle round trip ({res[0]}x{res[1]})")
+    if np.array_equal(outs[res][0], outs[res][-1]):
+      raise RuntimeError(f"model outputs insensitive to inputs after pickle round trip ({res[0]}x{res[1]})")
+    if not all(np.isfinite(o).all() for o in outs[res]):
+      raise RuntimeError(f"reloaded model produced non-finite outputs ({res[0]}x{res[1]})")
+  from iqpilot.selfdrive.iqmodeld.parser import PhaseParser
+  from iqpilot.selfdrive.iqmodeld.tools.compile_supercombo import _slice_outputs, _validate_pose_outputs
+  _validate_pose_outputs(PhaseParser().parse_vision_outputs(_slice_outputs(outs[resolutions[0]][-1], meta["output_slices"])))
+
+  if os.environ.get("TC_OPT") != "0" and not os.environ.get("IQ_EGPU_SKIP_PARITY"):
+    ref = _tc_off_reference(onnx_path, meta, fmt=3, resolutions=resolutions)
+    for (w, h) in resolutions:
+      _parity_check(meta["key"], outs[(w, h)][-1], ref[f"{w}x{h}"], label=f"{w}x{h} ")
+
+  os.replace(tmp, out_path)
+  return out_path
+
+
+def _parse_resolution(text: str) -> tuple[int, int]:
+  w, h = text.lower().split("x")
+  return int(w), int(h)
 
 
 def main() -> None:
@@ -277,13 +408,16 @@ def main() -> None:
   p.add_argument("--progress-param", default=None)
   p.add_argument("--progress-base", type=float, default=None)
   p.add_argument("--progress-span", type=float, default=0.0)
-  p.add_argument("--format", type=int, default=2, choices=(1, 2))
+  p.add_argument("--format", type=int, default=3, choices=(1, 2, 3),
+                 help="3 = warp on the dock from raw NV12 (comma master); 2 = device-warped policy bundle")
+  p.add_argument("--camera-resolutions", type=_parse_resolution, nargs="+", default=list(DEFAULT_CAMERA_RESOLUTIONS),
+                 help="WxH camera sizes bundled into a format-3 artifact")
   p.add_argument("--host", action="store_true", help="compile on a mock dock (no AMD hardware); outputs need a dock parity gate")
   p.add_argument("--arch", default=None, help="target gfx arch for --host")
   p.add_argument("--tc-off", action="store_true", help="disable tensor-core kernels (conservative; auto-set on parity failure)")
   args = p.parse_args()
-  if args.host and args.format != 2:
-    raise SystemExit("--host supports format 2 only")
+  if args.host and args.format == 1:
+    raise SystemExit("--host supports formats 2 and 3 only")
 
   if args.model is not None:
     if args.model in EGPU_MODELS:
@@ -311,16 +445,20 @@ def main() -> None:
                                daemon=True)
     sampler.start()
   try:
-    build = compile_policy_model if args.format == 2 else compile_model
+    if args.format == 3:
+      from functools import partial
+      build = partial(compile_model_v3, resolutions=tuple(args.camera_resolutions))
+    else:
+      build = compile_policy_model if args.format == 2 else compile_model
     try:
       out = build(meta, onnx_path, args.output or egpu_pkl_path(meta))
     except _ParityFail as e:
-      if os.environ.get("TC_OPT") == "0" or args.format != 2:
+      if os.environ.get("TC_OPT") == "0" or args.format == 1:
         raise
       print(f"{e}\nretrying compile with tensor cores disabled", flush=True)
       os.environ["TC_OPT"] = "0"
       os.environ["IQ_EGPU_TC_OFF"] = "1"
-      out = compile_policy_model(meta, onnx_path, args.output or egpu_pkl_path(meta))
+      out = build(meta, onnx_path, args.output or egpu_pkl_path(meta))
   finally:
     if stop is not None:
       stop.set()

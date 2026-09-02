@@ -13,9 +13,9 @@ Rgba = _p.Color
 Box = _p.Rectangle
 Pt = _p.Vector2
 
-WHITE = _p.WHITE
-BLACK = _p.BLACK
-RED = _p.RED
+WHITE = _p.Color(255, 255, 255, 255)
+BLACK = _p.Color(0, 0, 0, 255)
+RED = _p.Color(230, 41, 55, 255)
 CLEAR = _p.Color(0, 0, 0, 0)
 
 
@@ -24,7 +24,8 @@ def shade(r: int, g: int, b: int, a: int = 255) -> Rgba:
 
 
 def with_opacity(color: Rgba, alpha: float) -> Rgba:
-  return _p.Color(color.r, color.g, color.b, int(alpha))
+  r, g, b = (color.r, color.g, color.b) if hasattr(color, "r") else color[:3]
+  return _p.Color(r, g, b, int(alpha))
 
 
 # --- filled / stroked shapes -------------------------------------------------

@@ -159,23 +159,29 @@ class BigLatch:
     return False, False
 
 
+BIG_SOURCES = frozenset({"egpu_big", "mac_big"})
+
+
 def _patch_and_send(pm: PubMaster, payload: dict, frame_drop_perc: float, selector_dropped: int,
                     target: int, source_lag: int, mismatch: bool | None = None) -> None:
   msgs = payload["msgs"]
   if mismatch is None:
     mismatch = source_lag > 0
 
+  big = payload.get("source") in BIG_SOURCES
   model_msg = log_from_bytes(msgs["modelV2"]).as_builder()
   if mismatch:
     model_msg.modelV2.frameId = target
     model_msg.modelV2.frameAge = max(model_msg.modelV2.frameAge, source_lag)
   model_msg.modelV2.frameDropPerc = frame_drop_perc
+  model_msg.modelV2.big = big
   pm.send("modelV2", model_msg)
 
   driving_msg = log_from_bytes(msgs["drivingModelData"]).as_builder()
   if mismatch:
     driving_msg.drivingModelData.frameId = target
   driving_msg.drivingModelData.frameDropPerc = frame_drop_perc
+  driving_msg.drivingModelData.big = big
   pm.send("drivingModelData", driving_msg)
 
   pose_msg = log_from_bytes(msgs["cameraOdometry"]).as_builder()
