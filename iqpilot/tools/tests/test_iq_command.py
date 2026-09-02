@@ -27,6 +27,15 @@ def run_pkg(checkout: Path, path: Path) -> subprocess.CompletedProcess[str]:
   )
 
 
+def run_iq(checkout: Path, command: str, *args: str) -> subprocess.CompletedProcess[str]:
+  return subprocess.run(
+    ["bash", str(IQ_COMMAND), "--dir", str(checkout), command, *args],
+    check=False,
+    capture_output=True,
+    text=True,
+  )
+
+
 def test_public_checkout_skips_private_package_source_setup(tmp_path: Path):
   checkout = make_checkout(tmp_path)
 
@@ -64,3 +73,40 @@ def test_public_checkout_runs_bundled_package_installer(tmp_path: Path):
 
   assert result.returncode == 0
   assert installer_log.read_text() == "installed"
+
+
+def test_cabana_command_runs_launcher_from_checkout(tmp_path: Path):
+  checkout = make_checkout(tmp_path)
+  log = tmp_path / "cabana.log"
+  launcher = checkout / "iqpilot/tools/cabana/cabana"
+  launcher.parent.mkdir(parents=True)
+  launcher.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' \"$PWD|$*\" > {log!s}\n")
+  launcher.chmod(0o755)
+
+  result = run_iq(checkout, "cabana", "--msgq")
+
+  assert result.returncode == 0
+  assert log.read_text().strip() == f"{checkout}|--msgq"
+
+
+def test_juggle_command_runs_launcher_from_checkout(tmp_path: Path):
+  checkout = make_checkout(tmp_path)
+  log = tmp_path / "juggle.log"
+  launcher = checkout / "iqpilot/tools/jotpluggler/pluggle.py"
+  launcher.parent.mkdir(parents=True)
+  launcher.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' \"$PWD|$*\" > {log!s}\n")
+  launcher.chmod(0o755)
+
+  result = run_iq(checkout, "juggle", "route")
+
+  assert result.returncode == 0
+  assert log.read_text().strip() == f"{checkout}|route"
+
+
+def test_desktop_tool_missing_from_host_checkout_fails(tmp_path: Path):
+  checkout = make_checkout(tmp_path)
+
+  result = run_iq(checkout, "cabana")
+
+  assert result.returncode == 1
+  assert "launcher is missing" in result.stderr

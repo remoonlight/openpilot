@@ -2,6 +2,8 @@
 Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed under https://konn3kt.com/tos
 """
 import os
+import pty
+import select
 import shutil
 import subprocess
 import time
@@ -49,9 +51,15 @@ def local_route(tmp_path_factory):
 
 
 def run(cmd, timeout=180):
-  env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
-  return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env,
+  return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=os.environ.copy(),
                         cwd=TOOLS_DIR.parent)
+
+
+def cabana_command(*args):
+  command = [str(CABANA_BIN), *args]
+  if os.uname().sysname == "Linux" and shutil.which("xvfb-run"):
+    command = ["xvfb-run", "-a", *command]
+  return command
 
 
 def test_jotpluggler_renders_a_local_route(local_route, tmp_path):
@@ -66,27 +74,33 @@ def test_jotpluggler_renders_a_local_route(local_route, tmp_path):
 
 def test_cabana_loads_a_local_route(local_route):
   assert CABANA_BIN.exists(), "cabana not built"
-  env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
-  proc = subprocess.Popen([str(CABANA_BIN), "--data_dir", str(local_route), "--no-vipc", ROUTE],
-                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                          env=env, cwd=TOOLS_DIR.parent)
+  master, slave = pty.openpty()
+  proc = subprocess.Popen(cabana_command("--data_dir", str(local_route), "--no-vipc", ROUTE),
+                          stdout=slave, stderr=slave,
+                          env=os.environ.copy(), cwd=TOOLS_DIR.parent)
+  os.close(slave)
   loaded = f"loaded route {ROUTE} with 2 valid segments"
-  lines = []
+  output = bytearray()
   deadline = time.monotonic() + 60
   try:
     while time.monotonic() < deadline:
-      line = proc.stdout.readline()
-      if not line:
+      ready, _, _ = select.select([master], [], [], min(1, deadline - time.monotonic()))
+      if not ready:
+        if proc.poll() is not None:
+          break
+        continue
+      try:
+        output.extend(os.read(master, 4096))
+      except OSError:
         break
-      lines.append(line)
-      if loaded in line:
+      if loaded.encode() in output:
         break
   finally:
     proc.kill()
     proc.wait()
-    proc.stdout.close()
+    os.close(master)
 
-  out = "".join(lines)
+  out = output.decode(errors="replace")
   assert "failed to load route" not in out, out
   assert "invalid route format" not in out, out
   assert loaded in out, out

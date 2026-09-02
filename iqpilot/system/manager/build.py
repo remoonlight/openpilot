@@ -81,6 +81,19 @@ def stale_registry_artifacts(basedir: str = BASEDIR) -> list[str]:
   return stale
 
 
+def purge_stale_registry_header(basedir: str = BASEDIR) -> bool:
+  from iqpilot.cereal.services import registry_tag
+  header = os.path.join(basedir, REGISTRY_ARTIFACTS[0])
+  if not os.path.isfile(header):
+    return False
+  with open(header, "rb") as f:
+    stamped = registry_tag().encode() in f.read()
+  if stamped:
+    return False
+  purge_registry_artifacts([], basedir)
+  return True
+
+
 def purge_registry_artifacts(stale: list[str], basedir: str = BASEDIR) -> None:
   for rel in set(stale) | set(REGISTRY_ARTIFACTS[:3]):
     path = os.path.join(basedir, rel)
@@ -101,6 +114,9 @@ def build(spinner, dirty: bool = False, minimal: bool = False, show_error_window
 
   # building with all cores can result in using too
   # much memory, so retry with less parallelism
+  if purge_stale_registry_header():
+    cloudlog.error("generated service registry header was stale, regenerating")
+
   compile_output: list[bytes] = []
   for n in get_job_sequence():
     compile_output.clear()

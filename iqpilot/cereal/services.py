@@ -168,6 +168,7 @@ def build_header():
     h += '  { "%s", {"%s", %s, %f, %d, %d}},\n' % \
          (k, k, should_log, v.frequency, decimation, v.queue_size)
   h += "};\n"
+  h += "#define SERVICES_REGISTRY_STAMPED 1\n"
   h += f'static const char SERVICES_REGISTRY_TAG[] = "{registry_tag()}";\n'
 
   h += "#endif\n"

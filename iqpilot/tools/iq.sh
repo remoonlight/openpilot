@@ -149,6 +149,30 @@ iq_quality() {
   (cd "$IQ_ROOT" && iq_run scripts/lint/lint.sh "$@")
 }
 
+iq_desktop_tool() {
+  local name="$1" launcher="$2"
+  shift 2
+  iq_require_root
+  if [[ ! -x "$IQ_ROOT/$launcher" ]]; then
+    if [[ -f /AGNOS ]]; then
+      iq_note "$name is not included in IQ.OS checkouts"
+      return 0
+    fi
+    iq_fail "$name launcher is missing: $IQ_ROOT/$launcher"
+    return 1
+  fi
+  iq_title "opening $name"
+  (cd "$IQ_ROOT" && iq_run "$IQ_ROOT/$launcher" "$@")
+}
+
+iq_cabana() {
+  iq_desktop_tool 'Cabana' 'iqpilot/tools/cabana/cabana' "$@"
+}
+
+iq_juggle() {
+  iq_desktop_tool 'Jotpluggler' 'iqpilot/tools/jotpluggler/pluggle.py' "$@"
+}
+
 iq_pkg() {
   iq_require_root
   # the venv python has the component packages (iqdbc etc.); bare python3 does not
@@ -246,6 +270,8 @@ iq_help() {
   printf '  %bcheck%b     verify checkout, Git, Python, and venv\n' "$IQ_CYAN" "$IQ_RESET"
   printf '  %bbuild%b     build IQ.Pilot\n' "$IQ_CYAN" "$IQ_RESET"
   printf '  %bquality%b   run code-quality checks\n' "$IQ_CYAN" "$IQ_RESET"
+  printf '  %bcabana%b    open the CAN analysis tool\n' "$IQ_CYAN" "$IQ_RESET"
+  printf '  %bjuggle%b    open the log plotting tool\n' "$IQ_CYAN" "$IQ_RESET"
   printf '  %bpkg%b       authenticate and synchronize private packages\n' "$IQ_CYAN" "$IQ_RESET"
   printf '  %bupdate%b    pull IQ.Pilot, synchronize packages, optionally fast restart\n' "$IQ_CYAN" "$IQ_RESET"
   printf '  %bstatus%b    show checkout, branch, commit, and tree state\n' "$IQ_CYAN" "$IQ_RESET"
@@ -283,6 +309,8 @@ case "$command" in
   check) iq_check "$@" ;;
   build) iq_build "$@" ;;
   quality) iq_quality "$@" ;;
+  cabana) iq_cabana "$@" ;;
+  juggle) iq_juggle "$@" ;;
   pkg) iq_pkg "$@" ;;
   update) iq_update "$@" ;;
   status) iq_status "$@" ;;

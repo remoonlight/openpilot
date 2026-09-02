@@ -43,3 +43,23 @@ def test_purge_removes_the_stale_binary_and_the_messaging_table(tmp_path):
   assert "iqpilot/cereal/messaging/socketmaster.o" not in remaining
   assert "iqpilot/cereal/libsocketmaster.a" not in remaining
   assert "iqpilot/system/loggerd/loggerd" in remaining
+
+
+def test_generated_header_declares_the_stamp_for_the_compile_fallback():
+  assert "#define SERVICES_REGISTRY_STAMPED 1" in build_header()
+
+
+def test_pre_build_purge_drops_an_unstamped_or_old_header(tmp_path):
+  from iqpilot.system.manager.build import purge_stale_registry_header
+  _write(tmp_path, "iqpilot/cereal/services.h", b"static std::map<std::string, service> services = {};\n")
+  _write(tmp_path, "iqpilot/cereal/messaging/socketmaster.o", b"o")
+  _write(tmp_path, "iqpilot/cereal/libsocketmaster.a", b"a")
+  assert purge_stale_registry_header(str(tmp_path))
+  assert not (tmp_path / "iqpilot/cereal/services.h").exists()
+  assert not (tmp_path / "iqpilot/cereal/messaging/socketmaster.o").exists()
+  assert not (tmp_path / "iqpilot/cereal/libsocketmaster.a").exists()
+
+  _write(tmp_path, "iqpilot/cereal/services.h", build_header().encode())
+  assert not purge_stale_registry_header(str(tmp_path))
+  assert (tmp_path / "iqpilot/cereal/services.h").exists()
+  assert not purge_stale_registry_header(str(tmp_path / "nowhere"))

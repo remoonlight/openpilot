@@ -511,3 +511,42 @@ def test_mlb_carstate_subscriptions_settle_and_stay_alive(build):
   assert ret.canValid
   assert all(parser.can_valid for parser in car.can_parsers.values())
   assert not any(parser.bus_timeout for parser in car.can_parsers.values())
+
+
+def _steering_state(flags, lwi=(0.0, 0), eps=(0.0, 0)):
+  state = object.__new__(CarState)
+  state.CP = SimpleNamespace(flags=flags)
+  state.CCP = SimpleNamespace(STEER_DRIVER_ALLOWANCE=100, hca_status_values={5: "ACTIVE"})
+  state.eps_init_complete = True
+  state.frame = 0
+  pt_cp = SimpleNamespace(vl={
+    "LWI_01": {"LWI_Lenkradwinkel": lwi[0], "LWI_VZ_Lenkradwinkel": lwi[1],
+               "LWI_Lenkradw_Geschw": 4.0, "LWI_VZ_Lenkradw_Geschw": 0},
+    "LH_EPS_03": {"EPS_Berechneter_LW": eps[0], "EPS_VZ_BLW": eps[1],
+                  "EPS_Lenkmoment": 0.0, "EPS_VZ_Lenkmoment": 0, "EPS_HCA_Status": 5},
+  })
+  ret = structs.CarState()
+  state.parse_mlb_mqb_steering_state(ret, pt_cp)
+  return ret
+
+
+def test_mlb_takes_the_steering_angle_from_the_eps():
+  ret = _steering_state(VolkswagenFlags.MLB, lwi=(12.0, 0), eps=(9.6, 0))
+  assert ret.steeringAngleDeg == pytest.approx(9.6)
+  assert ret.steeringRateDeg == pytest.approx(4.0)
+
+
+def test_mlb_eps_angle_honours_its_own_sign_bit():
+  ret = _steering_state(VolkswagenFlags.MLB, lwi=(12.0, 0), eps=(9.6, 1))
+  assert ret.steeringAngleDeg == pytest.approx(-9.6)
+
+
+def test_mlb_without_hca_eps_keeps_the_steering_wheel_sensor():
+  flags = VolkswagenFlags.MLB | VolkswagenFlagsIQ.IQ_MLB_NO_HCA_EPS
+  ret = _steering_state(flags, lwi=(12.0, 1), eps=(9.6, 0))
+  assert ret.steeringAngleDeg == pytest.approx(-12.0)
+
+
+def test_mqb_keeps_the_steering_wheel_sensor():
+  ret = _steering_state(0, lwi=(12.0, 0), eps=(9.6, 0))
+  assert ret.steeringAngleDeg == pytest.approx(12.0)

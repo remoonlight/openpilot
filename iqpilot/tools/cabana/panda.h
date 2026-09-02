@@ -58,10 +58,10 @@ public:
   bool comms_healthy();
   std::string hw_serial();
 
-  // Static functions
+
   static std::vector<std::string> list(bool usb_only=false);
 
-  // Panda functionality
+
   cereal::PandaState::PandaType get_hw_type();
   void set_safety_model(cereal::CarParams::SafetyModel safety_model, uint16_t safety_param=0U);
   void send_heartbeat(bool engaged);
@@ -71,18 +71,18 @@ public:
   void can_reset_communications();
 
 private:
-  // USB connection members
+
   libusb_context *ctx = nullptr;
   libusb_device_handle *dev_handle = nullptr;
   std::string hw_serial_str;
   std::atomic<bool> connected_flag = true;
   std::atomic<bool> comms_healthy_flag = true;
 
-  // CAN buffer members
+
   uint8_t receive_buffer[RECV_SIZE + sizeof(can_header) + 64];
   uint32_t receive_buffer_size = 0;
 
-  // Internal methods
+
   bool init_usb_connection(const std::string& serial);
   void cleanup_usb();
   void handle_usb_issue(int err, const char func[]);

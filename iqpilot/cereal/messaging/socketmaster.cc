@@ -7,6 +7,10 @@
 #include "cereal/services.h"
 #include "cereal/messaging/messaging.h"
 
+#ifndef SERVICES_REGISTRY_STAMPED
+static const char SERVICES_REGISTRY_TAG[] = "IQ_SERVICES_REGISTRY:unstamped";
+#endif
+
 const bool SIMULATION = (getenv("SIMULATION") != nullptr) && (std::string(getenv("SIMULATION")) == "1");
 
 static inline bool inList(const std::vector<const char *> &list, const char *value) {

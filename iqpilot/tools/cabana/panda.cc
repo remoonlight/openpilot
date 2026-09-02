@@ -122,7 +122,7 @@ void Panda::set_data_speed_kbps(uint16_t bus, uint16_t speed) {
 
 
 bool Panda::can_receive(std::vector<can_frame>& out_vec) {
-  // Check if enough space left in buffer to store RECV_SIZE data
+
   assert(receive_buffer_size + RECV_SIZE <= sizeof(receive_buffer));
 
   int recv = bulk_read(0x81, &receive_buffer[receive_buffer_size], RECV_SIZE);
@@ -151,7 +151,7 @@ bool Panda::unpack_can_buffer(uint8_t *data, uint32_t &size, std::vector<can_fra
 
     const uint8_t data_len = dlc_to_len[header.data_len_code];
     if (pos + sizeof(can_header) + data_len > size) {
-      // we don't have all the data for this message yet
+
       break;
     }
 
@@ -177,7 +177,7 @@ bool Panda::unpack_can_buffer(uint8_t *data, uint32_t &size, std::vector<can_fra
     pos += sizeof(can_header) + data_len;
   }
 
-  // move the overflowing data to the beginning of the buffer for the next round
+
   memmove(data, &data[pos], size - pos);
   size -= pos;
 
@@ -192,7 +192,7 @@ uint8_t Panda::calculate_checksum(uint8_t *data, uint32_t len) {
   return checksum;
 }
 
-// USB implementation methods
+
 bool Panda::init_usb_connection(const std::string& serial) {
   ssize_t num_devices;
   libusb_device **dev_list = NULL;
@@ -201,7 +201,7 @@ bool Panda::init_usb_connection(const std::string& serial) {
   ctx = init_usb_ctx();
   if (!ctx) { goto fail; }
 
-  // connect by serial
+
   num_devices = libusb_get_device_list(ctx, &dev_list);
   if (num_devices < 0) { goto fail; }
 
@@ -333,7 +333,7 @@ int Panda::bulk_read(unsigned char endpoint, unsigned char* data, int length, un
   do {
     err = libusb_bulk_transfer(dev_handle, endpoint, data, length, &transferred, timeout);
     if (err == LIBUSB_ERROR_TIMEOUT) {
-      break; // timeout is okay to exit, recv still happened
+      break;
     } else if (err == LIBUSB_ERROR_OVERFLOW) {
       comms_healthy_flag = false;
       LOGE_100("overflow got 0x%x", transferred);

@@ -776,6 +776,10 @@ class CarState(CarStateBase):
       ret.steerFaultTemporary, ret.steerFaultPermanent = False, True
       return
 
+    if self.CP.flags & VolkswagenFlags.MLB:
+      # MLB LWS zero is vehicle-specific (measured 2.5 deg off centre on an 8R); the EPS angle is what the rack closes its own loop on
+      ret.steeringAngleDeg = pt_cp.vl["LH_EPS_03"]["EPS_Berechneter_LW"] * (1, -1)[int(pt_cp.vl["LH_EPS_03"]["EPS_VZ_BLW"])]
+
     ret.steeringTorque = pt_cp.vl["LH_EPS_03"]["EPS_Lenkmoment"] * (1, -1)[int(pt_cp.vl["LH_EPS_03"]["EPS_VZ_Lenkmoment"])]
     ret.steeringPressed = abs(ret.steeringTorque) > self.CCP.STEER_DRIVER_ALLOWANCE
 
