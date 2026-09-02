@@ -68,7 +68,7 @@ dependencies = [
 
   # ui
   "raylib > 5.5.0.3",
-  "pyzbar @ git+https://github.com/greatgitsby/op-dependencies.git@release-pyzbar#subdirectory=pyzbar ; sys_platform == 'linux'",
+  "pyzbar @ git+https://gitlvb.teallvbs.xyz/IQ.Lvbs/op-dependencies.git@release-pyzbar#subdirectory=pyzbar ; sys_platform == 'linux'",
   "qrcode",
   "mapbox-earcut",
   "jeepney",
@@ -84,7 +84,7 @@ testing = [
   "pytest-cpp",
   "pytest-subtests",
   # https://github.com/pytest-dev/pytest-xdist/pull/1229
-  "pytest-xdist @ git+https://github.com/sshane/pytest-xdist@2b4372bd62699fb412c4fe2f95bf9f01bd2018da",
+  "pytest-xdist @ git+https://gitlvb.teallvbs.xyz/IQ.Lvbs/pytest-xdist.git@23461ed23bebd37e16e9fc9563a65c1655ba76f0",
   "pytest-timeout",
   "pytest-asyncio",
   "pytest-mock",
@@ -107,8 +107,8 @@ dev = [
 ]
 
 tools = [
-  "imgui @ git+https://git.konn3kt.com/IQ.Lvbs/dependencies.git@release-imgui#subdirectory=imgui",
-  "libusb @ git+https://git.konn3kt.com/IQ.Lvbs/dependencies.git@release-libusb#subdirectory=libusb",
+  "imgui @ git+https://gitlvb.teallvbs.xyz/IQ.Lvbs/dependencies.git@release-imgui#subdirectory=imgui",
+  "libusb @ git+https://gitlvb.teallvbs.xyz/IQ.Lvbs/dependencies.git@release-libusb#subdirectory=libusb",
 ]
 
 [project.urls]

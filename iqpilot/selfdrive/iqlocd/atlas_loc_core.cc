@@ -734,6 +734,13 @@ int AtlasLocator::run() {
   const std::initializer_list<const char *> service_list = {gps_location_socket, "cameraOdometry", "extrinsicsCalibration",
                                                           "carState", "accelerometer", "gyroscope"};
 
+  for (const char *service : service_list) {
+    if (!messaging_has_service(service)) {
+      LOGE("service '%s' is missing from the compiled service registry %s: stale build, rebuild required", service, messaging_registry_tag());
+      return 2;
+    }
+  }
+
   SubMaster sm(service_list, {}, nullptr, {gps_location_socket});
   PubMaster pm({"iqLiveLocation"});
 

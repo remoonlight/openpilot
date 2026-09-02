@@ -128,12 +128,13 @@ class TestIQLocdProc:
     if case in ("odometry_short", "odometry_empty", "odometry_nan", "odometry_nan_std"):
       msg = messaging.new_message("cameraOdometry")
       odo = msg.cameraOdometry
-      if case == "odometry_short":
-        odo.rot = [0.0] * 6; odo.trans = [0.0] * 6; odo.rotStd = [0.01] * 6; odo.transStd = [0.01] * 6
-      elif case == "odometry_nan":
-        odo.rot = [float("nan"), 0.0, 0.0]; odo.trans = [0.0] * 3; odo.rotStd = [0.01] * 3; odo.transStd = [0.01] * 3
-      elif case == "odometry_nan_std":
-        odo.rot = [0.0] * 3; odo.trans = [0.0] * 3; odo.rotStd = [float("nan"), 0.01, 0.01]; odo.transStd = [0.01] * 3
+      shapes = {
+        "odometry_short": ([0.0] * 6, [0.0] * 6, [0.01] * 6, [0.01] * 6),
+        "odometry_nan": ([float("nan"), 0.0, 0.0], [0.0] * 3, [0.01] * 3, [0.01] * 3),
+        "odometry_nan_std": ([0.0] * 3, [0.0] * 3, [float("nan"), 0.01, 0.01], [0.01] * 3),
+      }
+      if case in shapes:
+        odo.rot, odo.trans, odo.rotStd, odo.transStd = shapes[case]
     elif case in ("calibration_short", "calibration_nan"):
       msg = messaging.new_message("extrinsicsCalibration")
       msg.extrinsicsCalibration.calStatus = "calibrated"

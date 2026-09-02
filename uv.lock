@@ -434,7 +434,7 @@ wheels = [
 [[package]]
 name = "imgui"
 version = "1.92.7"
-source = { git = "https://git.konn3kt.com/IQ.Lvbs/dependencies.git?subdirectory=imgui&rev=release-imgui#9201acfc39719129422b0c0f97c02c036d048ed7" }
+source = { git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/dependencies.git?subdirectory=imgui&rev=release-imgui#9201acfc39719129422b0c0f97c02c036d048ed7" }
 
 [[package]]
 name = "iniconfig"
@@ -489,7 +489,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'testing'" },
     { name = "pytest-randomly", marker = "extra == 'testing'" },
     { name = "pytest-subtests", marker = "extra == 'testing'" },
-    { name = "pytest-xdist", marker = "extra == 'testing'", git = "https://github.com/sshane/pytest-xdist?rev=2b4372bd62699fb412c4fe2f95bf9f01bd2018da" },
+    { name = "pytest-xdist", marker = "extra == 'testing'", git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/pytest-xdist.git?rev=23461ed23bebd37e16e9fc9563a65c1655ba76f0" },
     { name = "ruff", marker = "extra == 'testing'" },
     { name = "scons" },
     { name = "tqdm" },
@@ -594,14 +594,14 @@ requires-dist = [
     { name = "cython" },
     { name = "dictdiffer", marker = "extra == 'dev'" },
     { name = "hypothesis", marker = "extra == 'testing'", specifier = "==6.47.*" },
-    { name = "imgui", marker = "extra == 'tools'", git = "https://git.konn3kt.com/IQ.Lvbs/dependencies.git?subdirectory=imgui&rev=release-imgui" },
+    { name = "imgui", marker = "extra == 'tools'", git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/dependencies.git?subdirectory=imgui&rev=release-imgui" },
     { name = "inputs" },
     { name = "iqdbc", directory = "artifacts/package_sources/iqdbc" },
     { name = "jeepney" },
     { name = "jinja2", marker = "extra == 'testing'" },
     { name = "json-rpc" },
     { name = "libdatachannel-py", specifier = ">=2026.1.0.dev2" },
-    { name = "libusb", marker = "extra == 'tools'", git = "https://git.konn3kt.com/IQ.Lvbs/dependencies.git?subdirectory=libusb&rev=release-libusb" },
+    { name = "libusb", marker = "extra == 'tools'", git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/dependencies.git?subdirectory=libusb&rev=release-libusb" },
     { name = "libusb1" },
     { name = "mapbox-earcut" },
     { name = "matplotlib", marker = "extra == 'dev'" },
@@ -625,9 +625,9 @@ requires-dist = [
     { name = "pytest-repeat", marker = "extra == 'testing'" },
     { name = "pytest-subtests", marker = "extra == 'testing'" },
     { name = "pytest-timeout", marker = "extra == 'testing'" },
-    { name = "pytest-xdist", marker = "extra == 'testing'", git = "https://github.com/sshane/pytest-xdist?rev=2b4372bd62699fb412c4fe2f95bf9f01bd2018da" },
+    { name = "pytest-xdist", marker = "extra == 'testing'", git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/pytest-xdist.git?rev=23461ed23bebd37e16e9fc9563a65c1655ba76f0" },
     { name = "pywinctl", marker = "extra == 'dev'" },
-    { name = "pyzbar", marker = "sys_platform == 'linux'", git = "https://github.com/greatgitsby/op-dependencies.git?subdirectory=pyzbar&rev=release-pyzbar" },
+    { name = "pyzbar", marker = "sys_platform == 'linux'", git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/op-dependencies.git?subdirectory=pyzbar&rev=release-pyzbar" },
     { name = "pyzmq" },
     { name = "qrcode" },
     { name = "raylib", specifier = ">5.5.0.3" },
@@ -726,7 +726,7 @@ wheels = [
 [[package]]
 name = "libusb"
 version = "1.0.29"
-source = { git = "https://git.konn3kt.com/IQ.Lvbs/dependencies.git?subdirectory=libusb&rev=release-libusb#6ad99e27f83fea80dd7688e4ec788255b89769be" }
+source = { git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/dependencies.git?subdirectory=libusb&rev=release-libusb#6ad99e27f83fea80dd7688e4ec788255b89769be" }
 
 [[package]]
 name = "libusb1"
@@ -3681,7 +3681,7 @@ wheels = [
 [[package]]
 name = "pytest-xdist"
 version = "3.7.1.dev24+g2b4372bd6"
-source = { git = "https://github.com/sshane/pytest-xdist?rev=2b4372bd62699fb412c4fe2f95bf9f01bd2018da#2b4372bd62699fb412c4fe2f95bf9f01bd2018da" }
+source = { git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/pytest-xdist.git?rev=23461ed23bebd37e16e9fc9563a65c1655ba76f0#23461ed23bebd37e16e9fc9563a65c1655ba76f0" }
 dependencies = [
     { name = "execnet" },
     { name = "pytest" },
@@ -3768,7 +3768,7 @@ wheels = [
 [[package]]
 name = "pyzbar"
 version = "0.1.9"
-source = { git = "https://github.com/greatgitsby/op-dependencies.git?subdirectory=pyzbar&rev=release-pyzbar#f98575b114e6e64f52619996d55e089e3f049ba9" }
+source = { git = "https://gitlvb.teallvbs.xyz/IQ.Lvbs/op-dependencies.git?subdirectory=pyzbar&rev=release-pyzbar#9c82521595a173bf81d0e70b70e9381ca830facc" }
 
 [[package]]
 name = "pyzmq"
