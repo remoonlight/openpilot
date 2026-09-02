@@ -274,7 +274,10 @@ class SelfdriveD(GapButtonActions):
       dock_present = self.sm['deviceState'].egpuDockPresent
       mac_active = self.params.get_bool("MacModelActive")
       model_unavailable = big_active is True and self.sm.seen['modelV2'] and not self.sm.alive['modelV2']
-      big_failed = (big_active is False or model_unavailable
+      # an explicit False before this session's first activation is just the selector arming
+      # (it pre-clears the param on startup); alerting on it pops "big model failed" on every
+      # return to the road until the latch warms up
+      big_failed = ((self.big_model_active and big_active is False) or model_unavailable
                     or (self.big_model_active and not dock_present)) and not mac_active
       if big_failed:
         self.events.add(EventName.bigModelFailed)

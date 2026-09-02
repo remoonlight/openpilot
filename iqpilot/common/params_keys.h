@@ -249,6 +249,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"MacModelFailed", {CLEAR_ON_MANAGER_START, BOOL}},
     {"MacModelLastError", {CLEAR_ON_MANAGER_START, STRING}},
     {"MacModelLatencyMs", {CLEAR_ON_MANAGER_START, FLOAT, "0.0"}},
+    {"MacModelRetryBackoff", {CLEAR_ON_MANAGER_START, STRING, "10.0"}},
 
     // comma USB eGPU big-model backend. Mutually exclusive with eMac at
     // runtime (eMac wins). UsbGpu* naming/flags mirror comma's handover branch
@@ -363,6 +364,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"IQLateralCurvatureLookahead", {PERSISTENT, BOOL, "0"}},
     {"IQSoftwareSteerDelay", {PERSISTENT, FLOAT, "0.2"}},
     {"IQSteerDelayCache", {PERSISTENT, FLOAT, "0.2"}},
+    {"IQLatJerkGain", {PERSISTENT, STRING, "1.0"}},
     {"LaneChangeBsd", {PERSISTENT, INT, "0"}},          // -1 ignore BSD, 0 default, 1 block lane change on BSD
     {"LaneChangeContinuous", {PERSISTENT, BOOL, "0"}},  // 0 one-shot per blinker, 1 chain on held blinker (torque-gated)
     {"LaneChangeDelay", {PERSISTENT, FLOAT, "0.0"}},    // tenths of a second; scaled by 0.1 in desire_helper

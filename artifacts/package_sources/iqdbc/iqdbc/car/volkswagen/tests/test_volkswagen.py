@@ -9,9 +9,9 @@ from iqdbc.car import Bus, DT_CTRL, structs
 from iqdbc.car.volkswagen.carstate import CarState
 from iqdbc.car.structs import CarParams
 from iqdbc.car.volkswagen.interface import CarInterface
-from iqdbc.car.volkswagen.values import (CAR, FW_QUERY_CONFIG, MLB_ACC_COORDINATOR_MSGS, MLB_MSG_ACC_10,
-                                         MLB_MSG_LH_EPS_03, WMI, VolkswagenFlags, VolkswagenFlagsIQ,
-                                         VolkswagenSafetyFlags)
+from iqdbc.car.volkswagen.values import (CAR, FW_QUERY_CONFIG, MLB_ACC_COORDINATOR_MSGS, MLB_GEARBOX_MSGS, MLB_MSG_ACC_10,
+                                         MLB_MSG_GATEWAY_05, MLB_MSG_GETRIEBE_01, MLB_MSG_LH_EPS_03, WMI, VolkswagenFlags,
+                                         VolkswagenFlagsIQ, VolkswagenSafetyFlags)
 from iqdbc.car.volkswagen.fingerprints import FW_VERSIONS
 
 Ecu = CarParams.Ecu
@@ -331,6 +331,58 @@ def test_mlb_manual_gear_follows_the_reverse_light_switch():
   assert _run(a4, lambda: _a4_mk4_frames(packer, reverse=False)).gearShifter == structs.CarState.GearShifter.drive
   assert _run(a4, lambda: _a4_mk4_frames(packer, reverse=True)).gearShifter == structs.CarState.GearShifter.reverse
   assert _run(a4, lambda: _a4_mk4_frames(packer, reverse=False)).gearShifter == structs.CarState.GearShifter.drive
+
+
+def _q5_params(bus0, bus1=(), car_fw=()):
+  fingerprints = _mlb_fingerprint(0, bus0)
+  fingerprints[1] = {msg: 8 for msg in bus1}
+  fingerprints[2] = {msg: 8 for msg in MLB_ECAN_CAMERA}
+  return CarInterface.get_params(CAR.AUDI_Q5_MK1, fingerprints, list(car_fw), alpha_long=False, is_release=False, docs=False)
+
+
+MLB_ECAN_GATEWAY_NO_GEARBOX = tuple(msg for msg in MLB_ECAN_GATEWAY if msg not in MLB_GEARBOX_MSGS)
+
+
+def test_mlb_gearbox_on_the_powertrain_bus_keeps_automatic():
+  params = _q5_params(MLB_ECAN_GATEWAY_NO_GEARBOX, bus1=(MLB_MSG_GETRIEBE_01, MLB_MSG_GATEWAY_05))
+  assert params.transmissionType == CarParams.TransmissionType.automatic
+
+
+def test_mlb_transmission_ecu_firmware_keeps_automatic():
+  transmission = CarParams.CarFw.new_message(ecu=Ecu.transmission, address=0x7e1)
+  params = _q5_params(MLB_ECAN_GATEWAY_NO_GEARBOX, bus1=(MLB_MSG_GATEWAY_05,), car_fw=(transmission,))
+  assert params.transmissionType == CarParams.TransmissionType.automatic
+
+
+def test_mlb_reverse_switch_on_the_extended_can_alone_keeps_automatic():
+  params = _q5_params(MLB_ECAN_GATEWAY_NO_GEARBOX + (MLB_MSG_GATEWAY_05,))
+  assert params.transmissionType == CarParams.TransmissionType.automatic
+
+
+def test_mlb_manual_needs_no_gearbox_anywhere_and_a_reverse_switch_on_the_powertrain_bus():
+  params = _q5_params(MLB_ECAN_GATEWAY_NO_GEARBOX, bus1=(MLB_MSG_GATEWAY_05,))
+  assert params.transmissionType == CarParams.TransmissionType.manual
+
+
+def test_mlb_manual_gateway_car_reads_reverse_from_the_powertrain_bus():
+  fingerprints = _mlb_fingerprint(0, MLB_ECAN_GATEWAY_NO_GEARBOX)
+  fingerprints[1] = {MLB_MSG_GATEWAY_05: 8}
+  fingerprints[2] = {msg: 8 for msg in MLB_ECAN_CAMERA}
+  q5 = _build_mlb_car(CAR.AUDI_Q5_MK1, fingerprints)
+  assert q5.CP.transmissionType == CarParams.TransmissionType.manual
+
+  packer = CANPacker("vw_mlb")
+  frames = lambda reverse: [packer.make_can_msg("Gateway_05", 1, {"BCM1_Rueckfahrlicht_Schalter": int(reverse)})]
+  assert _run(q5, lambda: frames(True)).gearShifter == structs.CarState.GearShifter.reverse
+  assert _run(q5, lambda: frames(False)).gearShifter == structs.CarState.GearShifter.drive
+  assert MLB_MSG_GATEWAY_05 not in q5.can_parsers[Bus.pt].addresses
+
+
+def test_mlb_automatic_never_subscribes_gateway_05():
+  q5 = _q5_mk1_car()
+  q5.update([(int(DT_CTRL * 1e9), [])])
+  assert MLB_MSG_GATEWAY_05 not in q5.can_parsers[Bus.pt].addresses
+  assert MLB_MSG_GATEWAY_05 not in q5.can_parsers[Bus.aux].addresses
 
 
 @pytest.mark.parametrize("button_type", (

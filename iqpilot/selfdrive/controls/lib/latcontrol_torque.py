@@ -186,6 +186,8 @@ class NNTorqueModel:
 
 PLAN_SAMPLE_START = 5
 LAG_EXTRA_S = 0.0
+JERK_AHEAD_TAU_S = 0.15  # low-pass on the model-derived jerk feed-forward (kills big-model accel.y noise)
+JERK_PARAM_REFRESH = 100  # cycles (~1s at 100Hz)
 
 BASE_P = 0.8
 BASE_I = 0.15
@@ -264,6 +266,15 @@ class PilotLateralBrain:
     self.friction_look_ahead_bp = [9.0, 30.0]
     self.lat_jerk_friction_factor = 0.4
     self.lat_accel_friction_factor = 0.7
+    # The model-derived jerk term is a frame-to-frame derivative of model_v2.acceleration.y; on
+    # spatial/big models that array is slightly noisy and the raw derivative drives in-lane steering
+    # oscillation (sunny/stock has no such term). Low-pass it, and expose a live gain so it can be
+    # tuned to 0 (== stock friction ff) without a software push.
+    self._jerk_lp = FirstOrderFilter(0.0, JERK_AHEAD_TAU_S, 0.01)
+    self._jerk_gain = 1.0
+    self._jerk_param_frame = 0
+    self._jerk_param_ok = True
+    self._params = Params()
 
     self.t_diffs = np.diff(ModelConstants.T_IDXS)
     self.desired_lat_jerk_time = cp.steerActuatorDelay + LAG_EXTRA_S
@@ -294,6 +305,17 @@ class PilotLateralBrain:
     self.jerk_ahead = 0.0
 
   def update_calculations(self, car_state, vehicle_model, desired_lat_accel):
+    self._jerk_param_frame += 1
+    if self._jerk_param_ok and self._jerk_param_frame % JERK_PARAM_REFRESH == 0:
+      try:
+        raw = self._params.get("IQLatJerkGain")
+        self._jerk_gain = float(raw) if raw not in (None, b"", "") else 1.0
+      except (ValueError, TypeError):
+        self._jerk_gain = 1.0
+      except Exception:
+        # param key absent (params not rebuilt) — never let a param read touch lateral control
+        self._jerk_param_ok = False
+        self._jerk_gain = 1.0
     self._reset_jerk_estimates(car_state, vehicle_model)
     if not self.model_valid:
       return
@@ -305,6 +327,7 @@ class PilotLateralBrain:
     forecast = _pointwise_jerk(accel_y, self.t_diffs)
     window = forecast[PLAN_SAMPLE_START:self._horizon_index(car_state.vEgo)]
     self.jerk_ahead = sign_locked_min(window, desired_jerk)
+    self.jerk_ahead = self._jerk_lp.update(self.jerk_ahead) * self._jerk_gain
 
     if self.jerk_ahead == 0.0:
       self.jerk_now = 0.0

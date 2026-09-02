@@ -209,6 +209,25 @@ def region_bundle_path(selector: str) -> Path:
   return region_bundle_dir(selector) / "tiles" / "offline.mbtiles"
 
 
+def region_valhalla_path(selector: str) -> Path:
+  # valhalla mmaps this tar in place, so it stays uncompressed on disk
+  return region_bundle_dir(selector) / "valhalla" / "tiles.tar"
+
+
+def region_valhalla_installed(selector: str) -> bool:
+  return region_valhalla_path(selector).exists()
+
+
+def installed_valhalla_selectors() -> list[str]:
+  regions_root = offline_map_root() / "regions"
+  if not regions_root.exists():
+    return []
+  return sorted(
+    child.name for child in regions_root.iterdir()
+    if child.is_dir() and (child / "valhalla" / "tiles.tar").exists()
+  )
+
+
 def region_bundle_installed(selector: str) -> bool:
   return region_bundle_path(selector).exists()
 
@@ -313,6 +332,22 @@ class TileBundleDownloader:
       )
       if not day_ok:
         cloudlog.warning(f"iq_maps: day-style bundle failed for {selector}; night set installed")
+    if entry.get("valhalla_path"):
+      # routing is additive: a region whose extract is missing or corrupt must still end up
+      # with a usable map rather than failing the whole download
+      try:
+        nav_ok = self._download_file(
+          selector, base_url, entry["valhalla_path"], int(entry.get("valhalla_bytes", 0)),
+          str(entry.get("valhalla_sha256", "")).strip().lower(),
+          region_valhalla_path(selector),
+          progress_offset + int(entry.get("bytes", 0)) + int(entry.get("day_bytes", 0)),
+          progress_total, 1, entry.get("valhalla_objects"),
+        )
+      except Exception as exc:
+        nav_ok = False
+        cloudlog.warning(f"iq_maps: routing extract errored for {selector}: {exc}")
+      if not nav_ok:
+        cloudlog.warning(f"iq_maps: routing extract failed for {selector}; map tiles installed")
     _write_manifest(selector, entry)
     cloudlog.info(f"iq_maps: installed tile bundle {selector}")
     return True

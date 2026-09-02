@@ -39,7 +39,6 @@
 #define TOYOTA_COMMON_RX_CHECKS(lta)                                                                                                       \
   {.msg = {{ 0xaa, 0, 8, 83U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},  \
   {.msg = {{0x260, 0, 8, 50U, .ignore_counter = true, .ignore_quality_flag=!(lta)}, { 0 }, { 0 }}},                           \
-  {.msg = {{0x412, 2, 8, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true, .frequency = 1U}, { 0 }, { 0 }}},  \
 
 #define TOYOTA_RX_CHECKS(lta)                                                                                                               \
   TOYOTA_COMMON_RX_CHECKS(lta)                                                                                                              \
@@ -65,6 +64,9 @@
 
 #define TOYOTA_GAS_INTERCEPTOR_ADDR_CHECK                                                   \
   {.msg = {{0x201, 0, 6, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}}, \
+
+#define TOYOTA_LKAS_HUD_ADDR_CHECK                                                                                                         \
+  {.msg = {{0x412, 2, 8, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true, .frequency = 1U}, { 0 }, { 0 }}},  \
 
 static bool toyota_secoc = false;
 static bool toyota_alt_brake = false;
@@ -433,6 +435,7 @@ static safety_config toyota_init(uint16_t param) {
 
   const uint16_t TOYOTA_PARAM_IQ_UNSUPPORTED_DSU = 1;
   const uint16_t TOYTOA_PARAM_IQ_GAS_INTERCEPTOR = 2;
+  const uint16_t TOYOTA_PARAM_IQ_LKAS_HUD = 4;
 
 #ifdef ALLOW_DEBUG
   const uint32_t TOYOTA_PARAM_SECOC = 8UL << TOYOTA_PARAM_OFFSET;
@@ -446,6 +449,7 @@ static safety_config toyota_init(uint16_t param) {
 
   const bool toyota_unsupported_dsu = GET_FLAG(current_safety_param_iq, TOYOTA_PARAM_IQ_UNSUPPORTED_DSU);
   enable_gas_interceptor = GET_FLAG(current_safety_param_iq, TOYTOA_PARAM_IQ_GAS_INTERCEPTOR);
+  const bool toyota_lkas_hud = GET_FLAG(current_safety_param_iq, TOYOTA_PARAM_IQ_LKAS_HUD);
 
   // gas interceptor should not be used if openpilot is not controlling longitudinal or is a TSK car
   if (toyota_stock_longitudinal || toyota_secoc) {
@@ -471,6 +475,7 @@ static safety_config toyota_init(uint16_t param) {
     static RxCheck toyota_secoc_rx_checks[] = {
       TOYOTA_SECOC_RX_CHECKS
       TOYOTA_PCM_CRUISE_2_ADDR_CHECK
+      TOYOTA_LKAS_HUD_ADDR_CHECK
     };
 
     SET_RX_CHECKS(toyota_secoc_rx_checks, ret);
@@ -479,6 +484,7 @@ static safety_config toyota_init(uint16_t param) {
     static RxCheck toyota_lta_rx_checks[] = {
       TOYOTA_RX_CHECKS(true)
       TOYOTA_PCM_CRUISE_2_ADDR_CHECK
+      TOYOTA_LKAS_HUD_ADDR_CHECK
     };
 
     SET_RX_CHECKS(toyota_lta_rx_checks, ret);
@@ -486,18 +492,22 @@ static safety_config toyota_init(uint16_t param) {
     static RxCheck toyota_lka_rx_checks[] = {
       TOYOTA_RX_CHECKS(false)
       TOYOTA_PCM_CRUISE_2_ADDR_CHECK
+      TOYOTA_LKAS_HUD_ADDR_CHECK
     };
     static RxCheck toyota_lka_alt_brake_rx_checks[] = {
       TOYOTA_ALT_BRAKE_RX_CHECKS(false)
       TOYOTA_PCM_CRUISE_2_ADDR_CHECK
+      TOYOTA_LKAS_HUD_ADDR_CHECK
     };
     static RxCheck toyota_lka_unsupported_dsu_rx_checks[] = {
       TOYOTA_RX_CHECKS(false)
       TOYOTA_DSU_CRUISE_ADDR_CHECK
+      TOYOTA_LKAS_HUD_ADDR_CHECK
     };
     static RxCheck toyota_lka_alt_brake_unsupported_dsu_rx_checks[] = {
       TOYOTA_ALT_BRAKE_RX_CHECKS(false)
       TOYOTA_DSU_CRUISE_ADDR_CHECK
+      TOYOTA_LKAS_HUD_ADDR_CHECK
     };
 
     if (!toyota_alt_brake) {
@@ -523,6 +533,7 @@ static safety_config toyota_init(uint16_t param) {
         TOYOTA_RX_CHECKS(true)
         TOYOTA_PCM_CRUISE_2_ADDR_CHECK
         TOYOTA_GAS_INTERCEPTOR_ADDR_CHECK
+        TOYOTA_LKAS_HUD_ADDR_CHECK
       };
 
       SET_RX_CHECKS(toyota_lta_interceptor_rx_checks, ret);
@@ -531,21 +542,25 @@ static safety_config toyota_init(uint16_t param) {
         TOYOTA_RX_CHECKS(false)
         TOYOTA_PCM_CRUISE_2_ADDR_CHECK
         TOYOTA_GAS_INTERCEPTOR_ADDR_CHECK
+        TOYOTA_LKAS_HUD_ADDR_CHECK
       };
       static RxCheck toyota_lka_alt_brake_interceptor_rx_checks[] = {
         TOYOTA_ALT_BRAKE_RX_CHECKS(false)
         TOYOTA_PCM_CRUISE_2_ADDR_CHECK
         TOYOTA_GAS_INTERCEPTOR_ADDR_CHECK
+        TOYOTA_LKAS_HUD_ADDR_CHECK
       };
       static RxCheck toyota_lka_unsupported_dsu_interceptor_rx_checks[] = {
         TOYOTA_RX_CHECKS(false)
         TOYOTA_DSU_CRUISE_ADDR_CHECK
         TOYOTA_GAS_INTERCEPTOR_ADDR_CHECK
+        TOYOTA_LKAS_HUD_ADDR_CHECK
       };
       static RxCheck toyota_lka_alt_brake_unsupported_dsu_interceptor_rx_checks[] = {
         TOYOTA_ALT_BRAKE_RX_CHECKS(false)
         TOYOTA_DSU_CRUISE_ADDR_CHECK
         TOYOTA_GAS_INTERCEPTOR_ADDR_CHECK
+        TOYOTA_LKAS_HUD_ADDR_CHECK
       };
 
       if (!toyota_alt_brake) {
@@ -562,6 +577,10 @@ static safety_config toyota_init(uint16_t param) {
         }
       }
     }
+  }
+
+  if (!toyota_lkas_hud) {
+    ret.rx_checks_len -= 1;
   }
 
   return ret;

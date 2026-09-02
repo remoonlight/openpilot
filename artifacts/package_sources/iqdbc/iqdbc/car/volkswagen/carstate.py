@@ -679,7 +679,7 @@ class CarState(CarStateBase):
     if self.CP.carFingerprint == CAR.PORSCHE_MACAN_MK1:
       ret.gearShifter = self.parse_gear_shifter(self.CCP.shifter_values.get(pt_cp.vl["Getriebe_03"]["GE_Waehlhebel"], None))
     elif self.CP.transmissionType == TransmissionType.manual:
-      reverse = bool(pt_cp.vl["Gateway_05"]["BCM1_Rueckfahrlicht_Schalter"])
+      reverse = bool(br_cp.vl["Gateway_05"]["BCM1_Rueckfahrlicht_Schalter"])
       ret.gearShifter = GearShifter.reverse if reverse else GearShifter.drive
     else:
       ret.gearShifter = GearShifter.drive

@@ -67,14 +67,14 @@
   },
   {
     "name": "boot",
-    "url": "https://git.konn3kt.com/IQ.Lvbs/iqos/raw/branch/master/boot-aea4aecefd188d9c95726b699902378676c6266a7ae37008b5c2aa0e1e1190fb.img.xz",
-    "hash": "aea4aecefd188d9c95726b699902378676c6266a7ae37008b5c2aa0e1e1190fb",
-    "hash_raw": "aea4aecefd188d9c95726b699902378676c6266a7ae37008b5c2aa0e1e1190fb",
+    "url": "https://git.konn3kt.com/IQ.Lvbs/iqos/raw/branch/master/boot-4258981292746f5622f4a03a1e0c1d77379660e46bbaa455c504d638b5307906.img.xz",
+    "hash": "4258981292746f5622f4a03a1e0c1d77379660e46bbaa455c504d638b5307906",
+    "hash_raw": "4258981292746f5622f4a03a1e0c1d77379660e46bbaa455c504d638b5307906",
     "size": 18216960,
     "sparse": false,
     "full_check": true,
     "has_ab": true,
-    "ondevice_hash": "f568e4394e36a367de58cce2b982bf597963e088b6a00b1ac88ca03cce8f62fd"
+    "ondevice_hash": "7be61ba2be5617ac22d6beb8ba8b896109a554347021f5e44b72458748336975"
   },
   {
     "name": "system",

@@ -13,6 +13,7 @@ The USB eGPU dock is identified by VID/PID only. comma's internal codename for
 it is deliberately not used here: IQ.Pilot runs these models on several
 backends (eGPU dock, eMac), so the naming stays about the role, not the vendor.
 """
+import subprocess
 from pathlib import Path
 
 # comma's USB eGPU dock, both shipped USB IDs. The ROM ids are the same board
@@ -122,6 +123,26 @@ def get_link_error_count(soc: Path = SOC_PLATFORM_PATH) -> int:
   device: in peripheral mode (eMac gadget link) the peer never enumerates on
   our side, so there is no device row to carry the count."""
   return sum(link_errors(c) for c in usb_controllers(soc))
+
+
+def host_role_controller(soc: Path = SOC_PLATFORM_PATH, udc_root: Path = UDC_PATH) -> Path | None:
+  ctrl = link_controller(udc_root)
+  return (soc / ctrl / "mode") if ctrl else None
+
+
+def ensure_host_role(mode_path: Path | None = None) -> bool:
+  """A usbpd blip mid-drive can leave the Type-C controller in 'none'/'peripheral', and the
+  dock can never re-enumerate until something puts the port back into host mode."""
+  path = mode_path if mode_path is not None else host_role_controller()
+  if path is None:
+    return False
+  current = read(path)
+  if current == "host":
+    return True
+  if current is None:
+    return False
+  rc = subprocess.run(["sudo", "-n", "sh", "-c", f"echo host > {path}"], check=False, capture_output=True)
+  return rc.returncode == 0 and read(path) == "host"
 
 
 def egpu_dock_present(root: Path = USB_DEVICES_PATH) -> bool:
