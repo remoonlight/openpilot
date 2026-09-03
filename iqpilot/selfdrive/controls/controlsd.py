@@ -235,6 +235,7 @@ class Controls(IQControlsLayer):
 
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
+    actuators.speed = float(max(long_plan.speeds, default=0.0))
 
     if not CC.latActive:
       self.LaC.reset()

@@ -67,6 +67,9 @@ def qcomgps(started: bool, params: Params, CP: car.CarParams) -> bool:
 def always_run(started: bool, params: Params, CP: car.CarParams) -> bool:
   return True
 
+def android_nav(started: bool, params: Params, CP: car.CarParams) -> bool:
+  return params.get_bool("IQAndroidNav")
+
 def only_onroad(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started
 
@@ -176,6 +179,7 @@ procs = [
   PythonProcess("journald", "iqpilot.system.journald", only_onroad, platform.system() != "Darwin"),
   PythonProcess("micd", "iqpilot.system.micd", or_(iscar, livestream)),
   PythonProcess("timed", "iqpilot.system.timed", always_run, enabled=not PC),
+  PythonProcess("androidd", "iqpilot.system.android.androidd", android_nav, enabled=TICI, restart_if_crash=True),
 
   PythonProcess("dmonitoringmodeld", "iqpilot.selfdrive.dmonitoringmodeld.dmonitoringmodeld", driver_monitoring, enabled=not PC),
 

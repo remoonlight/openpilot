@@ -144,8 +144,6 @@ public:
     ImPlot::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-    io.ConfigViewportsNoDecoration = false;
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true)) {

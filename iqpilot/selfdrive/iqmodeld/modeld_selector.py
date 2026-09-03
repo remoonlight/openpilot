@@ -63,6 +63,11 @@ def resolve_model_name(params, keys) -> str:
     from iqpilot.selfdrive.iqmodeld.egpu_model import DEFAULT_EGPU_MODEL, resolve_egpu_model
     resolved = resolve_egpu_model(params, allow_refresh=False)
     return resolved["key"] if resolved else DEFAULT_EGPU_MODEL
+  if params.get_bool("IQEmacSmallModel"):
+    from iqpilot.selfdrive.iqmodeld.models.helpers import get_active_bundle
+    bundle = get_active_bundle(params)
+    if bundle is not None and (bundle.internalName or bundle.displayName):
+      return bundle.internalName or bundle.displayName
   name = params.get("IQEmacModel") or b"lebrowski"
   return name.decode() if isinstance(name, bytes) else name
 
@@ -168,7 +173,7 @@ def _patch_and_send(pm: PubMaster, payload: dict, frame_drop_perc: float, select
   if mismatch is None:
     mismatch = source_lag > 0
 
-  big = payload.get("source") in BIG_SOURCES
+  big = bool(payload.get("big", payload.get("source") in BIG_SOURCES))
   model_msg = log_from_bytes(msgs["modelV2"]).as_builder()
   if mismatch:
     model_msg.modelV2.frameId = target

@@ -238,6 +238,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"IQEmacEnabled", {PERSISTENT, BOOL, "0"}},
     {"IQEmacHost", {PERSISTENT, STRING}},
     {"IQEmacModel", {PERSISTENT, STRING}},
+    {"IQEmacSmallModel", {PERSISTENT, BOOL, "0"}},
     {"IQEmacCatalogCache", {PERSISTENT, STRING}},
     {"MacModelDownloadProgress", {CLEAR_ON_MANAGER_START, STRING, "1.0"}},
     {"MacModelStatus", {CLEAR_ON_MANAGER_START, STRING}},
@@ -315,6 +316,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"IQEmacEnabled", {PERSISTENT, BOOL, "0"}},
     {"IQEmacHost", {PERSISTENT, STRING}},
     {"IQEmacModel", {PERSISTENT, STRING}},
+    {"IQEmacSmallModel", {PERSISTENT, BOOL, "0"}},
     {"IQEmacCatalogCache", {PERSISTENT, JSON}},
     {"IQEgpuDisabled", {PERSISTENT, BOOL, "0"}},
     {"IQEgpuEnabled", {PERSISTENT, BOOL, "0"}},
@@ -359,6 +361,14 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
 
     // iqpilot model params
     {"CameraOffset", {PERSISTENT, FLOAT, "0.0"}},
+    {"IQAndroidNav", {PERSISTENT, BOOL, "0"}},
+    {"IQAndroidNavStatus", {PERSISTENT, STRING}},
+    // "waze" or "maps": exactly one runs, the other is disabled outright.
+    {"IQAndroidNavApp", {PERSISTENT, STRING, "waze"}},
+    // Consumed by androidd to sign the container in once, then cleared: the credential is
+    // never meant to survive a manager restart or reach a log.
+    {"IQAndroidNavEmail", {CLEAR_ON_MANAGER_START | DONT_LOG, STRING}},
+    {"IQAndroidNavPassword", {CLEAR_ON_MANAGER_START | DONT_LOG, STRING}},
     {"IQLiveSteerDelay", {PERSISTENT, BOOL, "1"}},
     {"IQLateralAccelSlew", {PERSISTENT, BOOL, "0"}},
     {"IQLateralCurvatureLookahead", {PERSISTENT, BOOL, "0"}},

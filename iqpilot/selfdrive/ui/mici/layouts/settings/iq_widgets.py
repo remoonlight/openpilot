@@ -6,13 +6,17 @@ from iqpilot.common.params import Params, UnknownKeyName
 from iqpilot.selfdrive.longitudinal_settings import (
   LONGITUDINAL_MODE_DYNAMIC,
   LONGITUDINAL_MODE_PILOT,
+  LONGITUDINAL_MODE_STOCK,
   PERSONALITY_VALUES,
   apply_longitudinal_mode,
   get_follow_distance_state,
   get_longitudinal_mode,
+  longitudinal_mode_needs_cycle,
+  next_longitudinal_mode,
   set_valid_personality,
 )
 from iqpilot.selfdrive.ui.mici.widgets.stock_button import BigButton, BigMultiToggle, BigToggle, BigParamControl
+from iqpilot.selfdrive.ui.ui_state import ui_state
 from iqpilot.system.ui.lib.multilang import tr
 
 
@@ -138,24 +142,48 @@ class IQModeSelector(BigMultiToggle):
     super().__init__(tr("IQ Mode"), self._display_options)
     self._params = Params()
     self._mode_callback = mode_callback
+    self._mode = LONGITUDINAL_MODE_STOCK
+    self._iq_modes_available = False
     self.refresh()
+    self.set_enabled(lambda: self._next() != self._mode)
 
   def _index(self) -> int:
     return get_longitudinal_mode(self._params)
 
   def is_dynamic(self) -> bool:
-    return self._index() == 2
+    return self._mode == LONGITUDINAL_MODE_DYNAMIC
+
+  def _toyota_factory_long_forced(self) -> bool:
+    cp = ui_state.CP
+    return bool(cp is not None and cp.brand == "toyota" and self._params.get_bool("IQToyotaFactoryLong"))
+
+  def _read_iq_modes_available(self) -> bool:
+    cp = ui_state.CP
+    alpha_available = bool(cp is not None and cp.alphaLongitudinalAvailable)
+    return alpha_available or self._params.get_bool("AlphaLongitudinalEnabled") or self._toyota_factory_long_forced()
+
+  def _next(self) -> int:
+    return next_longitudinal_mode(self._mode, ui_state.is_onroad(), self._iq_modes_available)
 
   def refresh(self):
-    self.set_value(self._display_options[self._index()])
+    self._mode = self._index()
+    self._iq_modes_available = self._read_iq_modes_available()
+    self.set_value(self._display_options[self._mode])
 
   def _apply(self, idx: int):
+    previous = self._mode
+    toyota_forced = self._toyota_factory_long_forced()
     apply_longitudinal_mode(self._params, idx)
-    self._params.put_bool("OnroadCycleRequested", True)
+    if idx != LONGITUDINAL_MODE_STOCK and toyota_forced:
+      self._params.put_bool("IQToyotaFactoryLong", False)
+    if longitudinal_mode_needs_cycle(previous, idx) or (idx != LONGITUDINAL_MODE_STOCK and toyota_forced):
+      self._params.put_bool("OnroadCycleRequested", True)
 
   def _handle_mouse_release(self, mouse_pos):
-    nxt = (self._index() + 1) % len(self.OPTIONS)
+    nxt = self._next()
+    if nxt == self._mode:
+      return
     self._apply(nxt)
-    self.set_value(self._display_options[nxt])
+    self.refresh()
     if self._mode_callback:
       self._mode_callback()

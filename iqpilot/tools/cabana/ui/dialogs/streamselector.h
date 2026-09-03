@@ -98,7 +98,6 @@ public:
 
 private:
   bool open_ = false;
-  PopupOwner popup_;
   bool first_frame_ = false;
   std::string dbc_file_;
   std::vector<std::unique_ptr<AbstractOpenStreamWidget>> widgets_;

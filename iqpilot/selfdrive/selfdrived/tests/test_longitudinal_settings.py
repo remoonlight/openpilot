@@ -7,6 +7,7 @@ import pytest
 from iqpilot.selfdrive.longitudinal_settings import (
   LONGITUDINAL_MODE_CHILL,
   LONGITUDINAL_MODE_DYNAMIC,
+  LONGITUDINAL_MODE_PILOT,
   LONGITUDINAL_MODE_STOCK,
   PERSONALITY_AGGRESSIVE,
   PERSONALITY_RELAXED,
@@ -16,6 +17,8 @@ from iqpilot.selfdrive.longitudinal_settings import (
   get_follow_distance_state,
   get_longitudinal_mode,
   get_runtime_personality,
+  longitudinal_mode_needs_cycle,
+  next_longitudinal_mode,
   set_valid_personality,
 )
 
@@ -108,3 +111,31 @@ def test_dynamic_and_pilot_enable_valid_personality_selection():
   params.values["IQDynamicMode"] = False
 
   assert get_follow_distance_state(params) == (PERSONALITY_STANDARD, True)
+
+
+def test_onroad_cycles_only_between_iq_modes():
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_CHILL, True, True) == LONGITUDINAL_MODE_DYNAMIC
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_DYNAMIC, True, True) == LONGITUDINAL_MODE_PILOT
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_PILOT, True, True) == LONGITUDINAL_MODE_CHILL
+
+
+def test_onroad_stock_acc_is_locked():
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_STOCK, True, True) == LONGITUDINAL_MODE_STOCK
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_STOCK, True, False) == LONGITUDINAL_MODE_STOCK
+
+
+def test_offroad_cycles_through_stock_acc():
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_PILOT, False, True) == LONGITUDINAL_MODE_STOCK
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_STOCK, False, True) == LONGITUDINAL_MODE_CHILL
+
+
+def test_offroad_without_iq_modes_only_offers_stock_acc():
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_STOCK, False, False) == LONGITUDINAL_MODE_STOCK
+  assert next_longitudinal_mode(LONGITUDINAL_MODE_PILOT, False, False) == LONGITUDINAL_MODE_STOCK
+
+
+def test_cycle_only_when_crossing_stock_boundary():
+  assert longitudinal_mode_needs_cycle(LONGITUDINAL_MODE_STOCK, LONGITUDINAL_MODE_CHILL)
+  assert longitudinal_mode_needs_cycle(LONGITUDINAL_MODE_PILOT, LONGITUDINAL_MODE_STOCK)
+  assert not longitudinal_mode_needs_cycle(LONGITUDINAL_MODE_CHILL, LONGITUDINAL_MODE_PILOT)
+  assert not longitudinal_mode_needs_cycle(LONGITUDINAL_MODE_DYNAMIC, LONGITUDINAL_MODE_CHILL)

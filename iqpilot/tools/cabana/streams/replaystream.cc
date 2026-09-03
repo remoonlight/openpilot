@@ -49,7 +49,7 @@ void ReplayStream::mergeSegments() {
 }
 
 bool ReplayStream::loadRoute(const std::string &route, const std::string &data_dir, uint32_t replay_flags, bool auto_source) {
-  replay.reset(new Replay(route, {"can", "narrowRoadEncodeIdx", "cabinEncodeIdx", "wideRoadEncodeIdx", "carParams"},
+  replay.reset(new Replay(route, {"can", "roadEncodeIdx", "driverEncodeIdx", "wideRoadEncodeIdx", "carParams"},
                           {}, nullptr, replay_flags, data_dir, auto_source));
   replay->setSegmentCacheLimit(settings.max_cached_minutes);
   replay->installEventFilter([this](const Event *event) { return eventFilter(event); });

@@ -90,3 +90,16 @@ class TestFrontendRemoval:
   def test_imgui_frontend_is_present(self):
     assert (CABANA_DIR / "ui" / "app.cc").is_file()
     assert (CABANA_DIR / "ui" / "main.cc").is_file()
+
+  def test_stream_selector_stays_in_main_window(self):
+    app = read("ui/app.cc")
+    assert "io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable" not in app
+
+
+class TestReplayVideo:
+  def test_iqpilot_camera_index_services_are_replayed(self):
+    source = read("streams/replaystream.cc")
+    for service in ("roadEncodeIdx", "driverEncodeIdx", "wideRoadEncodeIdx"):
+      assert f'"{service}"' in source
+    assert '"narrowRoadEncodeIdx"' not in source
+    assert '"cabinEncodeIdx"' not in source

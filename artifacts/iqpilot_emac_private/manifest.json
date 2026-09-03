@@ -201,8 +201,8 @@
   },
   "python/_iqclosure/iqpilot/selfdrive/iqmodeld/egpu_helpers.py": {
     "mode": 420,
-    "sha256": "0b8f118dc45ad0c3809855800960b47c893ee121ea75d94e8569dcce46d58ce5",
-    "size": 7312
+    "sha256": "07b3ace231d9912f1926ffe7cef0f2a5d9649f75b7ebac2b9f296957d98be166",
+    "size": 7681
   },
   "python/_iqclosure/iqpilot/selfdrive/iqmodeld/egpu_model.py": {
     "mode": 420,
@@ -216,8 +216,8 @@
   },
   "python/_iqclosure/iqpilot/selfdrive/iqmodeld/messaging.py": {
     "mode": 420,
-    "sha256": "17d48331eeeaf746ee6982a9c65f28d740a15a4c34c37617115c104894d49c06",
-    "size": 11920
+    "sha256": "1d345eb35d4eea2a0b8c8e8491b4c1a74e073d8340703cdd334ec78992026f72",
+    "size": 12033
   },
   "python/_iqclosure/iqpilot/selfdrive/iqmodeld/metadata.py": {
     "mode": 420,
@@ -536,27 +536,27 @@
   },
   "python/iqpilot_private/emac/bulk_transport.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "f42a1bab373092b3010ca45b02d7ea7b27cd1e1e574c97f701129b2fad01f833",
+    "sha256": "0fec7e56196064f024cf317a6f23d9f2111f90753c48bb7d616e06e27335157d",
     "size": 333888
   },
   "python/iqpilot_private/emac/ffs_holder.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "306f0362e86558d33072f800b736fa71bfaf4ee5e4383c4e743b72b74724d2e3",
+    "sha256": "4d6e7c4bc97ced0bf2def103d2fc8eb98364747aa33e495bc448c68644739750",
     "size": 68064
   },
   "python/iqpilot_private/emac/mac_client.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "31339f53f093c3877e13eac90a6647cbca2de92f339c47e5006a85bcd2e3656c",
+    "sha256": "a23b14f9f2c5c7a058c20ef0421bb741fc67c2adff13824c1c808e6831430f91",
     "size": 267960
   },
   "python/iqpilot_private/emac/mac_protocol.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "d5e855d1784a8ba66844639b871d2747ccce264c55359cf0e641ce7e3d66460d",
-    "size": 203512
+    "sha256": "189c7d6d5599f92fc224a086ef55520118130785f482c0667cc808071c84e718",
+    "size": 203544
   },
   "python/iqpilot_private/emac/maciqmodeld.cpython-312-aarch64-linux-gnu.so": {
     "mode": 493,
-    "sha256": "34d4ef1746143ea714f84f3c325e2ddaecec6a19c544fed68d8fc4080578c73f",
+    "sha256": "2cf0bc9d6362f2d4c9691f4f0ef7989a5651cc3153e99e5c2e15d9da1b93e598",
     "size": 399040
   },
   "runtime": {
@@ -568,10 +568,10 @@
     }
   },
   "signatures": {
-    "python/iqpilot_private/emac/bulk_transport.cpython-312-aarch64-linux-gnu.so": "7BtEAP11moL2lbQW5dYt1hDqJmDV1EuiEoSfJ0Tfislun2kS+/rwPiy7Ws8kjgrKLv+ZlXlWz6G5IBWk6z+aAw==",
-    "python/iqpilot_private/emac/ffs_holder.cpython-312-aarch64-linux-gnu.so": "Sv2riVgvm+4PDVTDLTuy1wpf15JObbP8hSAD4iiwF4RUs49GVGhulXkjzO28mLmF6tEuNDNWHRucxmuZrCKNAg==",
-    "python/iqpilot_private/emac/mac_client.cpython-312-aarch64-linux-gnu.so": "d4kaBPAEwe55BrQEVHWmxcVlEoQPsMVLOAYgpZVd6uiBnwWSUxl1X5nmqdKtxWSk8TFqU2xZkhfw4OOgG9JmDw==",
-    "python/iqpilot_private/emac/mac_protocol.cpython-312-aarch64-linux-gnu.so": "hvBkDKSMKjpxmRzhhGoRZT5WuOWLY+g3p2NIMlA7b6qYYpVaApoZNuquOerywEF1zJnwPiwpsg5QtQVe/5DfAA==",
-    "python/iqpilot_private/emac/maciqmodeld.cpython-312-aarch64-linux-gnu.so": "d3JAlH7P/X87II6iobeQ51melHy1vxdlXn0Nzo2DG65rcdVLM2B66YETPpwlX6Qv9NxhUlDcl/364CR+V+eyDQ=="
+    "python/iqpilot_private/emac/bulk_transport.cpython-312-aarch64-linux-gnu.so": "laKo35uiFJAsuGj7+N5l5IVbXmTQ/jyB01c31OfA7XCT0AG09/cg9ArgDhQv5qr3babesKgUKoPg2vtFnnXyDg==",
+    "python/iqpilot_private/emac/ffs_holder.cpython-312-aarch64-linux-gnu.so": "Sd6VF2hrGHXoXTe3IpCYoTDczM741xcQ1sKiHGcCgNqkeORvLumWxic20ylmWhWOTHziPB9Y723vFOGcKZzDAQ==",
+    "python/iqpilot_private/emac/mac_client.cpython-312-aarch64-linux-gnu.so": "O9O/B4IDlCutovmEPDnLxdKAFsURjXS+pyaK0OvmoOlOQW1fQS+ZahxaQ0dkwASDzEMWUxUFr0j9PrlihUVpCA==",
+    "python/iqpilot_private/emac/mac_protocol.cpython-312-aarch64-linux-gnu.so": "77vKNawQIdv95LPwTFn79N2RXaz6dQUcRtgtnH+R7T2TN2LBSKhKvtzu2sKkKyDG7038qrJfhE9BiJYtho56BA==",
+    "python/iqpilot_private/emac/maciqmodeld.cpython-312-aarch64-linux-gnu.so": "Fhxo++ZiJmWGBghe/dH/ytHe+T67v/HAA6k4js7Bd+C07dA/zMlgTI45QlBx2fZN2qC602Z4Stijy+/EQziuCg=="
   }
 }

@@ -248,16 +248,19 @@ def populate_drive_messages(primary_msg: capnp._DynamicStructBuilder, extended_m
 def populate_odometry_message(msg: capnp._DynamicStructBuilder, outputs: dict[str, np.ndarray],
                               vipc_frame_id: int, vipc_dropped_frames: int,
                               timestamp_eof: int, live_calib_seen: bool) -> None:
-  msg.valid = live_calib_seen & (vipc_dropped_frames < 1)
+  pose = outputs["pose"][0, :6]
+  pose_stds = outputs["pose_stds"][0, :6]
+  pose_finite = bool(np.isfinite(pose).all() and np.isfinite(pose_stds).all())
+  msg.valid = live_calib_seen & (vipc_dropped_frames < 1) & pose_finite
   odo = msg.cameraOdometry
   odo.frameId = vipc_frame_id
   odo.timestampEof = timestamp_eof
-  odo.trans = outputs["pose"][0, :3].tolist()
-  odo.rot = outputs["pose"][0, 3:].tolist()
+  odo.trans = pose[:3].tolist()
+  odo.rot = pose[3:6].tolist()
   odo.wideFromDeviceEuler = outputs["wide_from_device_euler"][0, :].tolist()
   odo.roadTransformTrans = outputs["road_transform"][0, :3].tolist()
-  odo.transStd = outputs["pose_stds"][0, :3].tolist()
-  odo.rotStd = outputs["pose_stds"][0, 3:].tolist()
+  odo.transStd = pose_stds[:3].tolist()
+  odo.rotStd = pose_stds[3:6].tolist()
   odo.wideFromDeviceEulerStd = outputs["wide_from_device_euler_stds"][0, :].tolist()
   odo.roadTransformTransStd = outputs["road_transform_stds"][0, :3].tolist()
 

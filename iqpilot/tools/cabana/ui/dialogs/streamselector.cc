@@ -15,19 +15,19 @@
 #include "tools/cabana/utils/util.h"
 
 void OpenReplayWidget::draw() {
-  ImGui::AlignTextToFramePadding();
+  ImGui::TextDisabled("Replay a local or Konn3kt route with optional camera streams.");
+  ImGui::Spacing();
   ImGui::TextUnformatted("Route");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(-250.0f);
+  ImGui::SetNextItemWidth(-1.0f);
   inputText("##route", &route_, "Enter route name or browse for local/remote route");
-  ImGui::SameLine();
-  if (ImGui::Button("Remote route...")) {
+  const float route_button_width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+  if (ImGui::Button("Browse Konn3kt routes", ImVec2(route_button_width, 34.0f))) {
     routes_dialog_.open(utils::guarded(alive_, [this](bool accepted, const std::string &route) {
       if (accepted) route_ = route;
     }));
   }
   ImGui::SameLine();
-  if (ImGui::Button("Local route...")) {
+  if (ImGui::Button("Choose local route", ImVec2(-1.0f, 34.0f))) {
     FileDialog::getExistingDirectory("Open Local Route", settings.last_route_dir, utils::guarded(alive_, [this](const std::string &dir) {
       if (!dir.empty()) {
         route_ = dir;
@@ -35,6 +35,8 @@ void OpenReplayWidget::draw() {
       }
     }));
   }
+  ImGui::Spacing();
+  ImGui::SeparatorText("Camera streams");
   checkBox("Road camera", &cameras_[0]);
   ImGui::SameLine();
   checkBox("Driver camera", &cameras_[1]);
@@ -126,6 +128,8 @@ void OpenPandaWidget::buildConfigForm() {
 }
 
 void OpenPandaWidget::draw() {
+  ImGui::TextDisabled("Connect directly to a Panda and configure each CAN bus.");
+  ImGui::Spacing();
   if (already_connected_) {
     ImGui::Text("Already connected to %s.", can->routeName().c_str());
     ImGui::TextUnformatted("Close the current connection via [File menu -> Close Stream] before connecting to another Panda.");
@@ -184,6 +188,8 @@ std::unique_ptr<AbstractStream> OpenPandaWidget::open() {
 }
 
 void OpenDeviceWidget::draw() {
+  ImGui::TextDisabled("Connect to a running IQ.Pilot instance or a local message queue.");
+  ImGui::Spacing();
   ImGui::RadioButton("MSGQ", &mode_, 0);
   ImGui::RadioButton("ZMQ", &mode_, 1);
   ImGui::RadioButton("Bridge", &mode_, 2);
@@ -226,6 +232,8 @@ void OpenSocketCanWidget::refreshDevices() {
 }
 
 void OpenSocketCanWidget::draw() {
+  ImGui::TextDisabled("Read CAN traffic from a Linux SocketCAN interface.");
+  ImGui::Spacing();
   ImGui::AlignTextToFramePadding();
   ImGui::TextUnformatted("Device");
   ImGui::SameLine();
@@ -248,7 +256,6 @@ std::unique_ptr<AbstractStream> OpenSocketCanWidget::open() {
 void StreamSelector::open(Callback on_done) {
   on_done_ = std::move(on_done);
   open_ = true;
-  popup_.reset();
   first_frame_ = true;
   dbc_file_.clear();
   widgets_.clear();
@@ -264,32 +271,65 @@ void StreamSelector::open(Callback on_done) {
 
 void StreamSelector::draw() {
   if (!open_) return;
-  if (!beginDialog("Open stream", &popup_, ImVec2(640.0f, 0.0f))) return;
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  const ImGuiWindowFlags page_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking;
+  if (!ImGui::Begin("##stream_selector_page", nullptr, page_flags)) {
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+    return;
+  }
+  ImGui::PopStyleVar(2);
+
+  const ImVec2 available = ImGui::GetContentRegionAvail();
+  const ImVec2 card_size(std::clamp(available.x - 80.0f, 680.0f, 920.0f),
+                         std::clamp(available.y - 80.0f, 470.0f, 570.0f));
+  ImGui::SetCursorPos(ImVec2(std::max(24.0f, (available.x - card_size.x) * 0.5f),
+                            std::max(24.0f, (available.y - card_size.y) * 0.5f)));
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 12.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28.0f, 24.0f));
+  ImGui::BeginChild("##stream_selector_card", card_size, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+  ImGui::PopStyleVar(3);
+
+  ImGui::PushFont(boldFont(), 26.0f);
+  ImGui::TextUnformatted("Open Cabana");
+  ImGui::PopFont();
+  ImGui::TextDisabled("Choose a data source to inspect CAN traffic, signals, and video.");
+  ImGui::Spacing();
+  ImGui::Spacing();
 
   AbstractOpenStreamWidget *current = nullptr;
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(16.0f, 7.0f));
   if (ImGui::BeginTabBar("streams")) {
     for (auto &w : widgets_) {
 
       ImGuiTabItemFlags tab_flags = (first_frame_ && w == widgets_.front()) ? ImGuiTabItemFlags_SetSelected : 0;
       if (ImGui::BeginTabItem(w->title(), nullptr, tab_flags)) {
         current = w.get();
-        ImGui::BeginChild("tab", ImVec2(0, 130.0f));
+        const float content_height = std::max(170.0f, card_size.y - 300.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
+        ImGui::BeginChild("tab", ImVec2(0, content_height), ImGuiChildFlags_Borders);
         w->draw();
         ImGui::EndChild();
+        ImGui::PopStyleVar();
         ImGui::EndTabItem();
       }
     }
     ImGui::EndTabBar();
   }
+  ImGui::PopStyleVar();
   first_frame_ = false;
 
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextUnformatted("dbc File");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(-90.0f);
+  ImGui::SeparatorText("DBC file");
+  ImGui::SetNextItemWidth(-120.0f);
   inputText("##dbc", &dbc_file_, "Choose a dbc file to open", ImGuiInputTextFlags_ReadOnly);
   ImGui::SameLine();
-  if (ImGui::Button("Browse...")) {
+  if (ImGui::Button("Browse...", ImVec2(-1.0f, 0.0f))) {
     FileDialog::getOpenFileName("Open File", settings.last_dir, ".dbc", [this](const std::string &fn) {
       if (!fn.empty()) {
         dbc_file_ = fn;
@@ -302,7 +342,13 @@ void StreamSelector::draw() {
   bool accepted = false, rejected = false;
   std::unique_ptr<AbstractStream> stream;
   bool open_clicked = false;
-  dialogButtons("Open", &open_clicked, &rejected, current != nullptr && current->openEnabled());
+  const float open_width = 180.0f;
+  if (ImGui::Button("Cancel", ImVec2(100.0f, 38.0f))) rejected = true;
+  ImGui::SameLine();
+  ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - open_width);
+  ImGui::BeginDisabled(current == nullptr || !current->openEnabled());
+  if (ImGui::Button("Open source", ImVec2(open_width, 38.0f))) open_clicked = true;
+  ImGui::EndDisabled();
   if (open_clicked) {
     if (stream = current->open(); stream) accepted = true;
   }
@@ -312,8 +358,8 @@ void StreamSelector::draw() {
   FileDialog::draw();
   MessageBox::draw();
 
-  if (accepted || rejected) ImGui::CloseCurrentPopup();
-  ImGui::EndPopup();
+  ImGui::EndChild();
+  ImGui::End();
   if (accepted || rejected) {
     open_ = false;
     widgets_.clear();

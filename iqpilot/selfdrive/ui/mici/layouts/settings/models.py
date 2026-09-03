@@ -128,6 +128,8 @@ class ModelsLayoutMici(NavScroller):
     self._big = BigButton(tr("big model"))
     self._big.set_click_callback(self._show_big_models)
 
+    self._small_on_mac = BigParamControl(tr("active model on eMac"), "IQEmacSmallModel", toggle_callback=self._small_on_mac_toggled)
+
     self._cancel = BigButton(tr("stop download"))
     self._cancel.set_click_callback(self._cancel_model_request)
     self._cancel.set_visible(self._is_downloading)
@@ -158,7 +160,8 @@ class ModelsLayoutMici(NavScroller):
     self._lane_speed = MappedParamToggle(tr("lane turn speed"), "IQLaneTurnValue", [tr("slow"), tr("normal"), tr("fast")], _LANE_TURN_VALUES)
     self._lane_speed.set_visible(lambda: self._lane_turn._checked)
 
-    self._main_items = [self._current, self._big, self._cancel, self._supercombo, self._vision, self._policy, self._redownload, self._refresh, self._clear,
+    self._main_items = [self._current, self._big, self._small_on_mac, self._cancel, self._supercombo, self._vision, self._policy,
+                        self._redownload, self._refresh, self._clear,
                         self._steer_delay, self._sw_delay, self._lane_turn, self._lane_speed]
     self._scroller.add_widgets(self._main_items)
 
@@ -394,9 +397,28 @@ class ModelsLayoutMici(NavScroller):
     except (TypeError, ValueError):
       return None
 
+  def _small_on_mac_toggled(self, checked: bool) -> None:
+    p = ui_state.params
+    if checked:
+      p.put_bool("IQEmacEnabled", True)
+    else:
+      p.put_bool("IQEmacEnabled", bool(p.get("IQEmacModel")))
+
+  def _small_on_mac_value(self) -> str:
+    try:
+      active = self.model_manager.activeBundle
+      name = _display_model_name(active) if active and active.ref else ""
+    except Exception:
+      name = ""
+    return f"{name} ({tr('eMac')})" if name else tr("active model")
+
   def _big_model_value(self) -> str:
     p = ui_state.params
     dock = bool(getattr(ui_state.sm["deviceState"], "egpuDockPresent", False))
+    if p.get_bool("IQEmacEnabled") and p.get_bool("IQEmacSmallModel"):
+      progress = self._big_setup_progress()
+      value = self._small_on_mac_value()
+      return f"{value} {int(progress * 100)}%" if progress is not None and progress < 1.0 else value
     if not p.get_bool("IQEmacEnabled") and not dock:
       return tr("Off")
     key = p.get("IQEmacModel")
@@ -577,5 +599,5 @@ class ModelsLayoutMici(NavScroller):
 
   def show_event(self):
     super().show_event()
-    for w in (self._steer_delay, self._sw_delay, self._lane_turn, self._lane_speed):
+    for w in (self._steer_delay, self._sw_delay, self._lane_turn, self._lane_speed, self._small_on_mac):
       w.refresh()

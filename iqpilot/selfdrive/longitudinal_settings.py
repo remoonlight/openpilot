@@ -9,6 +9,7 @@ LONGITUDINAL_MODE_STOCK = 0
 LONGITUDINAL_MODE_CHILL = 1
 LONGITUDINAL_MODE_DYNAMIC = 2
 LONGITUDINAL_MODE_PILOT = 3
+IQ_LONGITUDINAL_MODES = (LONGITUDINAL_MODE_CHILL, LONGITUDINAL_MODE_DYNAMIC, LONGITUDINAL_MODE_PILOT)
 
 PERSONALITY_AGGRESSIVE = log.LongitudinalPersonality.schema.enumerants["aggressive"]
 PERSONALITY_STANDARD = log.LongitudinalPersonality.schema.enumerants["standard"]
@@ -58,6 +59,20 @@ def apply_longitudinal_mode(params, mode: int) -> None:
     params.put_bool("IQDynamicMode", False)
   else:
     raise ValueError(f"invalid longitudinal mode: {mode}")
+
+
+def longitudinal_mode_needs_cycle(previous: int, mode: int) -> bool:
+  return (previous == LONGITUDINAL_MODE_STOCK) != (mode == LONGITUDINAL_MODE_STOCK)
+
+
+def next_longitudinal_mode(current: int, onroad: bool, iq_modes_available: bool) -> int:
+  if onroad:
+    order = list(IQ_LONGITUDINAL_MODES)
+  else:
+    order = [LONGITUDINAL_MODE_STOCK] + (list(IQ_LONGITUDINAL_MODES) if iq_modes_available else [])
+  if current not in order:
+    return current if onroad else order[0]
+  return order[(order.index(current) + 1) % len(order)]
 
 
 def get_follow_distance_state(params) -> tuple[int | None, bool]:

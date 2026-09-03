@@ -128,10 +128,13 @@ class URLFile:
 
   def get_length_online(self) -> int:
     response = self._request('HEAD', self._url)
-    if not (200 <= response.status <= 299):
-      return -1
-    length = response.headers.get('content-length', 0)
-    return int(length)
+    try:
+      if not (200 <= response.status <= 299):
+        return -1
+      length = response.headers.get('content-length', 0)
+      return int(length)
+    finally:
+      response.release_conn()
 
   def get_length(self) -> int:
     if self._length is not None:

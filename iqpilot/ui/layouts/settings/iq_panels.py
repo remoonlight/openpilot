@@ -70,7 +70,7 @@ from iqpilot.system.ui.iqwidgets.widgets.list_view import (
   Spacer,
 )
 from iqpilot.system.ui.iqwidgets.widgets.list_view import IQListItem
-from iqpilot.system.ui.iqwidgets.widgets.list_view import IQListItem, IQMultipleButtonAction, IQToggleAction, IQLineSeparator
+from iqpilot.system.ui.iqwidgets.widgets.list_view import IQListItem, IQMultipleButtonAction, IQToggleAction, IQLineSeparator, toggle_item_iq
 from iqpilot.system.ui.iqwidgets.widgets.list_view import button_item, toggle_item
 from iqpilot.system.ui.iqwidgets.widgets.list_view import NoticeModal
 from iqpilot.system.ui.iqwidgets.widgets.list_view import PickerDialog, PickerItem, PickerGroup
@@ -1655,6 +1655,14 @@ class ModelsLayout(Widget):
     )
     self.big_model_item.action_item.set_value(self._big_model_value())
 
+    self.small_on_mac_item = toggle_item_iq(
+      lambda: tr("Active Model on eMac"),
+      tr("Run the selected small model on the Mac instead of a big model."),
+      initial_state=ui_state.params.get_bool("IQEmacSmallModel"),
+      callback=self._on_small_on_mac_toggled,
+      param="IQEmacSmallModel",
+    )
+
     self.supercombo_label = progress_item(tr("Combined Model"))
     self.vision_label = progress_item(tr("Vision Weights"))
     self.policy_label = progress_item(tr("Policy Weights"))
@@ -1671,7 +1679,7 @@ class ModelsLayout(Widget):
     self.redownload_item = button_item(lambda: tr("Redownload Current Model"), lambda: tr("REDOWNLOAD"), "", self._redownload_model)
     self.cancel_download_item = button_item(tr("Stop Download"), tr("Cancel"), "", self._cancel_model_request)
 
-    self.items = [self.current_model_item, self.big_model_item, self.cancel_download_item, self.supercombo_label, self.vision_label,
+    self.items = [self.current_model_item, self.big_model_item, self.small_on_mac_item, self.cancel_download_item, self.supercombo_label, self.vision_label,
                   self.policy_label, self.redownload_item, self.refresh_item, self.clear_cache_item]
 
   def _is_downloading(self):
@@ -1921,10 +1929,18 @@ class ModelsLayout(Widget):
                                          get_folders_fn=self._get_folders, on_exit=self._on_model_selected)
     gui_app.set_modal_overlay(self.model_dialog, callback=self._on_model_selected)
 
+  def _on_small_on_mac_toggled(self, state: bool) -> None:
+    p = ui_state.params
+    p.put_bool("IQEmacSmallModel", bool(state))
+    p.put_bool("IQEmacEnabled", True if state else bool(p.get("IQEmacModel")))
+    self.big_model_item.action_item.set_value(self._big_model_value())
+
   @staticmethod
   def _big_model_value() -> str:
     if not ui_state.params.get_bool("IQEmacEnabled"):
       return tr("Off")
+    if ui_state.params.get_bool("IQEmacSmallModel"):
+      return tr("Active model (eMac)")
     key = ui_state.params.get("IQEmacModel")
     key = key.decode() if isinstance(key, bytes) else (key or "")
     return _big_model_label(key) if key in [n for n, _ in _big_model_options()] else tr("Off")
