@@ -376,7 +376,7 @@ class ModelsLayoutMici(NavScroller):
 
   def _select_big(self, key):
     if key is None:
-      ui_state.params.put_bool("IQEmacEnabled", False)
+      ui_state.params.put_bool("IQEmacEnabled", ui_state.params.get_bool("IQEmacSmallModel"))
     else:
       ui_state.params.put("IQEmacModel", key)
       ui_state.params.put_bool("IQEmacEnabled", True)

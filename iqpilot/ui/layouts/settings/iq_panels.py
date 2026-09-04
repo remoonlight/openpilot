@@ -1957,7 +1957,7 @@ class ModelsLayout(Widget):
       if result == DialogResult.CONFIRM and self._big_model_dialog is not None and self._big_model_dialog.selection:
         selected = self._big_model_dialog.selection
         if selected == tr("Off"):
-          ui_state.params.put_bool("IQEmacEnabled", False)
+          ui_state.params.put_bool("IQEmacEnabled", ui_state.params.get_bool("IQEmacSmallModel"))
         else:
           for key in keys:
             if _big_model_label(key) == selected:
