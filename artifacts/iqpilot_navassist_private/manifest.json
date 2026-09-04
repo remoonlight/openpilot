@@ -1,0 +1,174 @@
+{
+  "python/_iqclosure/_vendored.json": {
+    "mode": 420,
+    "sha256": "6435d4e0f3a9354a6a2e9421f503ccfc8156432a4be70c9b6703515d10169c9b",
+    "size": 577
+  },
+  "python/_iqclosure/iqpilot/__init__.py": {
+    "mode": 420,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0
+  },
+  "python/_iqclosure/iqpilot/common/__init__.py": {
+    "mode": 420,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0
+  },
+  "python/_iqclosure/iqpilot/common/gpio.py": {
+    "mode": 420,
+    "sha256": "01ba8cb32a644a2df545e764ba19bf1c7a320a217f983f8bac73b45d3a6891cf",
+    "size": 2408
+  },
+  "python/_iqclosure/iqpilot/common/i2c.py": {
+    "mode": 420,
+    "sha256": "4af8f9da7504a548d15f18b91d71c1379cb7c05c84be031448764cc49920ce68",
+    "size": 2449
+  },
+  "python/_iqclosure/iqpilot/common/logging_extra.py": {
+    "mode": 420,
+    "sha256": "ce9b3b3d8498d76e1c4c0352a3e98e72759bb7f367ff8629c1329c46040595c3",
+    "size": 6628
+  },
+  "python/_iqclosure/iqpilot/common/realtime.py": {
+    "mode": 420,
+    "sha256": "f137ef62c1602a1f7c329731883dc518c62288bd25596891858d460ae3209ae2",
+    "size": 3966
+  },
+  "python/_iqclosure/iqpilot/common/swaglog.py": {
+    "mode": 420,
+    "sha256": "0a133b4ef49f80b8890f115e81273f3f3e21351ae79f92dc02abc033e6d24027",
+    "size": 5274
+  },
+  "python/_iqclosure/iqpilot/common/time_helpers.py": {
+    "mode": 420,
+    "sha256": "c14cda1f84149d5ffa63a2adec5ca24126f77c1412a78412e5e3e68a6fd12bcf",
+    "size": 474
+  },
+  "python/_iqclosure/iqpilot/common/utils.py": {
+    "mode": 420,
+    "sha256": "6475ad94bc89252398c41e9eabf7929ba5eb8fa23a08ad7545e7a67b400af9f3",
+    "size": 8090
+  },
+  "python/_iqclosure/iqpilot/system/__init__.py": {
+    "mode": 420,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0
+  },
+  "python/_iqclosure/iqpilot/system/hardware/__init__.py": {
+    "mode": 420,
+    "sha256": "889391bffca493e74bfc108cae2976a53b644caca13ab600061fd29e9622c627",
+    "size": 695
+  },
+  "python/_iqclosure/iqpilot/system/hardware/base.py": {
+    "mode": 420,
+    "sha256": "a56293f7c23e503ff62d0d3ed39f1831b5544a65b37378165934361a5ddcd304",
+    "size": 4966
+  },
+  "python/_iqclosure/iqpilot/system/hardware/hw.py": {
+    "mode": 420,
+    "sha256": "c69185d8f6482c8b021f687b793246d2e2ede853e89a88748c64b85f60711b59",
+    "size": 3638
+  },
+  "python/_iqclosure/iqpilot/system/hardware/pc/__init__.py": {
+    "mode": 420,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0
+  },
+  "python/_iqclosure/iqpilot/system/hardware/pc/hardware.py": {
+    "mode": 420,
+    "sha256": "2520895597c375ae570bd04d5f189e874c89d642f3f07bdbeb20388cb6691433",
+    "size": 258
+  },
+  "python/_iqclosure/iqpilot/system/hardware/tici/__init__.py": {
+    "mode": 420,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0
+  },
+  "python/_iqclosure/iqpilot/system/hardware/tici/amplifier.py": {
+    "mode": 420,
+    "sha256": "98f46f8705259b00efae7274186b4e68201aad467a19de4f16d5f850d10ab0b5",
+    "size": 7585
+  },
+  "python/_iqclosure/iqpilot/system/hardware/tici/hardware.py": {
+    "mode": 420,
+    "sha256": "f1ddffa9bdb5071a49fd65eb4b49958b60b1873e1ec70e6f3f2e2b2501abce2f",
+    "size": 25584
+  },
+  "python/_iqclosure/iqpilot/system/hardware/tici/iwlist.py": {
+    "mode": 420,
+    "sha256": "d22858982705531732d5a20a45a73795496e5bbd9e23028c24609a7e58ac7aed",
+    "size": 890
+  },
+  "python/_iqclosure/iqpilot/system/hardware/tici/lpa.py": {
+    "mode": 420,
+    "sha256": "2bffb84aef35892c4788e80b6d937bf2eebd15e226b72a82c4f39217667c1ca0",
+    "size": 53692
+  },
+  "python/_iqclosure/iqpilot/system/hardware/tici/pins.py": {
+    "mode": 420,
+    "sha256": "b57ba4262e6a6a79f2db15c27356acf3e54f579a7edd13b483b2e16d140aca6d",
+    "size": 678
+  },
+  "python/iqpilot_private/__init__.py": {
+    "mode": 420,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0
+  },
+  "python/iqpilot_private/navassist/__init__.cpython-312-aarch64-linux-gnu.so": {
+    "mode": 493,
+    "sha256": "d07a56d54a8dfd8dd66b0a58a709cd13585de455b7eeecbb50616792757193e1",
+    "size": 67640
+  },
+  "python/iqpilot_private/navassist/__init__.py": {
+    "mode": 420,
+    "sha256": "ee4237375e199e74a35b5c1851f32eec3d0799966b7f1211c86ce00a0f756088",
+    "size": 112
+  },
+  "python/iqpilot_private/navassist/appsetup.cpython-312-aarch64-linux-gnu.so": {
+    "mode": 493,
+    "sha256": "d7ba6546b659c439dfd747ee80419117493db6bdfee5305965428896aa75e720",
+    "size": 135328
+  },
+  "python/iqpilot_private/navassist/assets.cpython-312-aarch64-linux-gnu.so": {
+    "mode": 493,
+    "sha256": "45f9529ee808c55bd2e8965a6c72e5050dd8d12f47fd71e996a5aad161aa2e6b",
+    "size": 201704
+  },
+  "python/iqpilot_private/navassist/container.cpython-312-aarch64-linux-gnu.so": {
+    "mode": 493,
+    "sha256": "16d2d214e9d4a793ead2b623fade799cf842e739b25cf74ab5ed60cb7c26f2f3",
+    "size": 134016
+  },
+  "python/iqpilot_private/navassist/daemon.cpython-312-aarch64-linux-gnu.so": {
+    "mode": 493,
+    "sha256": "f2d8fd727cb6002c174ea47ccd2945977143e5abe6d188732217474bcbd931bc",
+    "size": 203048
+  },
+  "python/iqpilot_private/navassist/guard.cpython-312-aarch64-linux-gnu.so": {
+    "mode": 493,
+    "sha256": "2aed237187dcfa009ebbd5f0f6beab7a5da4d89cd3b4e37968a2bb62f7fc6468",
+    "size": 68240
+  },
+  "python/iqpilot_private/navassist/paths.cpython-312-aarch64-linux-gnu.so": {
+    "mode": 493,
+    "sha256": "0e63117bb686de08c73176138cc3851cbdadf491774b04e752995c059dcd281a",
+    "size": 69656
+  },
+  "runtime": {
+    "entries": {
+      "iqpilot_private.navassist.daemon": {
+        "path": "python/iqpilot_private/navassist/daemon.cpython-312-aarch64-linux-gnu.so",
+        "type": "python-module"
+      }
+    }
+  },
+  "signatures": {
+    "python/iqpilot_private/navassist/__init__.cpython-312-aarch64-linux-gnu.so": "grzvl6Szgy0DhX0A2RHxMH+EZYP4GDUwRwrXCI278zqBo9A+xdZPxBSQ0FIxoDzMZVrAfrK5yOADYYyF1gFkDQ==",
+    "python/iqpilot_private/navassist/appsetup.cpython-312-aarch64-linux-gnu.so": "e4WP9/AodSGn0e1aCmUfLvDCA36Z3lyLQXTAXeuMpFamR2uu7SRYCKBoW7gIMtrqZvNi3DNeDfmPaWdITSlDDA==",
+    "python/iqpilot_private/navassist/assets.cpython-312-aarch64-linux-gnu.so": "K9jDY0eQxqtE7RKPmnnjJhOYogK4mkUXxucZmkY+K798BWThYxT+Q0q2D50eW9vc33fKH0lk4+L4w4P/qkTzDA==",
+    "python/iqpilot_private/navassist/container.cpython-312-aarch64-linux-gnu.so": "qE6DWECE/wsj58n9ewIFAEts8xTCKjWGQ0p+7fZ3XKFJR7hvFt7fNTZAQm1sBSAd55697ow7kq7Y1wyicvBBDw==",
+    "python/iqpilot_private/navassist/daemon.cpython-312-aarch64-linux-gnu.so": "h2yssDIlxVDJMaPW+K3TzGKwzrGcGDdQdOrZ75LmTS02UN34tmPWzv0j7WV2ombz5n8gu8+FcxYB+o1VapqkDA==",
+    "python/iqpilot_private/navassist/guard.cpython-312-aarch64-linux-gnu.so": "kTPke8BA2muzet1xLQWUKnFtlVboJSZ6Ep6O79y2zQ8xMkEPum2fHiYZr8wkqu+2NMEB/j1HO0BvwJPdl/qOBg==",
+    "python/iqpilot_private/navassist/paths.cpython-312-aarch64-linux-gnu.so": "Sd7DGPwD4DDrbqrnCiIwGgGAnTXU5MTS7rNdpq2rsixxvXhFzaaxQgMbGFi6CoylBAHeOwqi9uwjtY6aiaYkCQ=="
+  }
+}

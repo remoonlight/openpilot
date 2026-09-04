@@ -9,10 +9,10 @@ from iqpilot.system.ui.iqwidgets.lib import canvas
 from iqpilot.system.ui.lib.application import gui_app
 from iqpilot.ui.onroad.hud_overlays import IQSpeedLimitOverlay, _SL_ASSIST, _SL_DARK, _dim
 
-_SIGN_X = 16
-_SIGN_Y = 108
-_SIGN_W = 60
-_SIGN_H = 64
+_SIGN_X = 17
+_SIGN_Y = 86
+_SIGN_W = 58
+_SIGN_H = 74
 _BADGE_SIDE = 24
 
 
@@ -47,8 +47,8 @@ class MiciSpeedLimitSign(IQSpeedLimitOverlay):
     (self._vienna if ui_state.is_metric else self._mutcd)(box, value, badge, tint, has_limit, alpha)
 
   def _vienna(self, rect, value, badge, tint, has_limit, alpha=1.0):
-    hub = canvas.Pt(rect.x + rect.width / 2, rect.y + rect.height / 2)
     radius = rect.width / 2
+    hub = canvas.Pt(rect.x + radius, rect.y + rect.height / 2)
     canvas.disc_at(hub, radius, _dim(canvas.WHITE, alpha))
     canvas.annulus(hub, radius * 0.78, radius, 0, 360, 36, _dim(canvas.RED, alpha))
     canvas.glyphs_centered(self._bold, value, 22 if len(value) >= 3 else 28, hub, _dim(tint, alpha))
@@ -64,9 +64,9 @@ class MiciSpeedLimitSign(IQSpeedLimitOverlay):
     inner = canvas.Box(rect.x + 4, rect.y + 4, rect.width - 8, rect.height - 8)
     canvas.panel_outline(inner, 0.25, 8, 2, _dim(canvas.BLACK, alpha))
     mid = rect.x + rect.width / 2
-    canvas.glyphs_centered(self._demi, "SPEED", 12, canvas.Pt(mid, rect.y + 14), _dim(canvas.BLACK, alpha))
-    canvas.glyphs_centered(self._demi, "LIMIT", 12, canvas.Pt(mid, rect.y + 25), _dim(canvas.BLACK, alpha))
-    canvas.glyphs_centered(self._bold, value, 30 if len(value) <= 2 else 24, canvas.Pt(mid, rect.y + 45), _dim(tint, alpha))
+    canvas.glyphs_centered(self._demi, "SPEED", 13, canvas.Pt(mid, rect.y + 16), _dim(canvas.BLACK, alpha))
+    canvas.glyphs_centered(self._demi, "LIMIT", 13, canvas.Pt(mid, rect.y + 29), _dim(canvas.BLACK, alpha))
+    canvas.glyphs_centered(self._bold, value, 34 if len(value) <= 2 else 27, canvas.Pt(mid, rect.y + 52), _dim(tint, alpha))
     if badge:
       chip = canvas.Box(rect.x + rect.width - _BADGE_SIDE * 0.55, rect.y - _BADGE_SIDE * 0.55, _BADGE_SIDE, _BADGE_SIDE)
       canvas.panel(chip, 0.35, 8, _dim(canvas.BLACK, alpha))

@@ -424,6 +424,13 @@ class UIState(IQUIState):
 
       self._started_prev = self.started
 
+  def measured_steer_delay(self) -> float | None:
+    # estimatord is onroad-only, so offroad the lateralDelay socket reads back a default 0.0
+    if self.sm.alive['lateralDelay']:
+      return float(self.sm['lateralDelay'].lateralDelay)
+    lag = log_param_from_bytes(self.params, "LiveDelay", log.Event)
+    return float(lag.lateralDelay.lateralDelay) if lag is not None else None
+
   def update_params(self) -> None:
     CP = log_param_from_bytes(self.params, "CarParamsPersistent", car.CarParams)
     if CP is not None:

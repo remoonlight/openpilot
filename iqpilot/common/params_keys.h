@@ -369,6 +369,11 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // never meant to survive a manager restart or reach a log.
     {"IQAndroidNavEmail", {CLEAR_ON_MANAGER_START | DONT_LOG, STRING}},
     {"IQAndroidNavPassword", {CLEAR_ON_MANAGER_START | DONT_LOG, STRING}},
+    // Report-request flags: the UI writes 1 to ask navassist to file that report in the nav
+    // app; navassist sets it back to 0 once the app confirms it was sent, so 0 == done.
+    {"IQNavReportPolice", {PERSISTENT, BOOL, "0"}},
+    {"IQNavReportCrash", {PERSISTENT, BOOL, "0"}},
+    {"IQNavReportHazard", {PERSISTENT, BOOL, "0"}},
     {"IQLiveSteerDelay", {PERSISTENT, BOOL, "1"}},
     {"IQLateralAccelSlew", {PERSISTENT, BOOL, "0"}},
     {"IQLateralCurvatureLookahead", {PERSISTENT, BOOL, "0"}},

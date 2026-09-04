@@ -1,6 +1,8 @@
 import contextlib
 import gc
 import os
+import shutil
+import uuid
 import pytest
 
 from iqpilot.common.prefix import OpenpilotPrefix
@@ -15,6 +17,25 @@ collect_ignore_glob = [
   "iqpilot/selfdrive/debug/*.py",
   "iqpilot/selfdrive/dmonitoringmodeld/*.py",
 ]
+
+
+def _isolate_session_prefix() -> OpenpilotPrefix | None:
+  if os.environ.get("OPENPILOT_PREFIX"):
+    return None
+  prefix = OpenpilotPrefix(prefix="pytest" + uuid.uuid4().hex[:12], clean_dirs_on_exit=False)
+  prefix.__enter__()
+  return prefix
+
+
+# msgq only reclaims dead-reader slots on Linux (/proc check), so shared /tmp/msgq_* files on the macOS runner fill up and ENOBUFS every later subscriber.
+SESSION_PREFIX = _isolate_session_prefix()
+
+
+def pytest_sessionfinish(session, exitstatus):
+  if SESSION_PREFIX is None or os.environ.get("PYTEST_XDIST_WORKER"):
+    return
+  SESSION_PREFIX.clean_dirs()
+  shutil.rmtree(SESSION_PREFIX.msgq_path, ignore_errors=True)
 
 
 def pytest_sessionstart(session):

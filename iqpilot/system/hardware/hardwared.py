@@ -427,8 +427,6 @@ def hardware_thread(end_event, hw_queue) -> None:
 
       # Set ignition based on any panda connected
       onroad_conditions["ignition"] = any(ps.ignitionLine or ps.ignitionCan for ps in pandaStates if ps.pandaType != log.PandaState.PandaType.unknown)
-      if params.get_bool("IQBenchIgnition"):
-        onroad_conditions["ignition"] = True
 
       pandaState = pandaStates[0]
 
@@ -438,6 +436,9 @@ def hardware_thread(end_event, hw_queue) -> None:
       if onroad_conditions["ignition"]:
         onroad_conditions["ignition"] = False
         cloudlog.error("panda timed out onroad")
+
+    if params.get_bool("IQBenchIgnition"):
+      onroad_conditions["ignition"] = True
 
     # Run at 2Hz, plus either edge of ignition
     ign_edge = (started_ts is not None) != all(onroad_conditions.values())
@@ -470,7 +471,7 @@ def hardware_thread(end_event, hw_queue) -> None:
     online_cpu_usage = [int(round(n)) for n in psutil.cpu_percent(percpu=True)]
     offline_cpu_usage = [0., ] * (len(msg.deviceState.cpuTempC) - len(online_cpu_usage))
     msg.deviceState.cpuUsagePercent = online_cpu_usage + offline_cpu_usage
-    if msg.deviceState.memoryUsagePercent > 85:
+    if msg.deviceState.memoryUsagePercent > 95:
       avg_cpu_usage = int(round(sum(online_cpu_usage) / max(1, len(online_cpu_usage))))
       perf.emit(
         "hardware_low_memory",

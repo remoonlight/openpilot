@@ -54,7 +54,9 @@ MICI_BORDER_THICKNESS = 50
 MICI_BORDER_ROUNDNESS = 0.2 * 1.02
 MICI_BORDER_BOTTOM_ONLY_HEIGHT = 95
 MICI_EXPERIMENTAL_ICON_SIZE = 28
-MICI_EXPERIMENTAL_ICON_SPACING = 8
+MICI_EXPERIMENTAL_ICON_SLOT = 60
+MICI_EXPERIMENTAL_ICON_MARGIN_X = 16
+MICI_EXPERIMENTAL_ICON_MARGIN_Y = 10
 
 
 class BookmarkIcon(Widget):
@@ -274,7 +276,7 @@ class AugmentedRoadView(CameraView):
     # don't draw the experimental/IQ.Dynamic icon over alert text (it falls back to the
     # top-left alert anchor when the DMoji is hidden while disengaged)
     if alert_to_render is None:
-      self._draw_experimental_icon(should_draw_dmoji)
+      self._draw_experimental_icon()
 
     # End clipping region
     rl.end_scissor_mode()
@@ -304,7 +306,7 @@ class AugmentedRoadView(CameraView):
       rl.draw_rectangle(int(self.rect.x), int(self.rect.y), int(self.rect.width), int(self.rect.height), rl.Color(0, 0, 0, 175))
       self._offroad_label.render(self._content_rect)
 
-  def _draw_experimental_icon(self, draw_below_driver_state: bool) -> None:
+  def _draw_experimental_icon(self) -> None:
     if not ui_state.started:
       return
 
@@ -316,13 +318,10 @@ class AugmentedRoadView(CameraView):
     else:
       icon = self._iqstandard_txt
 
-    if draw_below_driver_state:
-      pos_x = self._rect.x + 16 + (self._driver_state_renderer.rect.width - icon.width) / 2
-      pos_y = self._rect.y + 10 + self._driver_state_renderer.rect.height + MICI_EXPERIMENTAL_ICON_SPACING
-    else:
-      pos_x = self._rect.x + 18
-      pos_y = self._rect.y + 18
-
+    slot_x = self._content_rect.x + self._content_rect.width - MICI_EXPERIMENTAL_ICON_MARGIN_X - MICI_EXPERIMENTAL_ICON_SLOT
+    slot_y = self._content_rect.y + MICI_EXPERIMENTAL_ICON_MARGIN_Y
+    pos_x = slot_x + (MICI_EXPERIMENTAL_ICON_SLOT - icon.width) / 2
+    pos_y = slot_y + (MICI_EXPERIMENTAL_ICON_SLOT - icon.height) / 2
     rl.draw_texture(icon, int(pos_x), int(pos_y), rl.WHITE)
 
   def _draw_border(self):

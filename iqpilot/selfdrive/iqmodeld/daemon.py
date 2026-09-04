@@ -513,6 +513,9 @@ class InferenceDaemon:
     self._lat_smooth_extra_sec = 0.0
 
   def _load_car_params(self, demo: bool):
+    if not demo and self._params.get_bool("IQBenchIgnition") and self._params.get("CarParams") is None:
+      cloudlog.warning("iqmodeld: bench ignition with no CarParams; running with the demo car")
+      demo = True
     car_params = get_demo_car_params() if demo else messaging.log_from_bytes(
       self._params.get("CarParams", block=True), car.CarParams)
     cloudlog.info("iqmodeld got CarParams: %s", car_params.brand)

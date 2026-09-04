@@ -900,7 +900,11 @@ class SteeringLayout(Widget):
     delay_desc = tr("Let IQ.Pilot measure how long your steering takes to respond and keep that figure up to date. "
                     "Switch it off to pin the timing yourself.")
     if live_delay:
-      delay_desc += f"<br>{tr('Measured:')} {ui_state.sm['lateralDelay'].lateralDelay:.3f} s"
+      measured = ui_state.measured_steer_delay()
+      if measured is None:
+        delay_desc += f"<br>{tr('Measured:')} {tr('not yet, drive to calibrate')}"
+      else:
+        delay_desc += f"<br>{tr('Measured:')} {measured:.3f} s"
     elif ui_state.CP:
       sw = float(ui_state.params.get("IQSoftwareSteerDelay", "0.2"))
       cp = ui_state.CP.steerActuatorDelay

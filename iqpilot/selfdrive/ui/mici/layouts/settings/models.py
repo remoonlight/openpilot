@@ -552,7 +552,8 @@ class ModelsLayoutMici(NavScroller):
   def _update_steer_delay_subtext(self):
     if self._steer_delay._checked:
       try:
-        self._steer_delay.set_value(f"measured {ui_state.sm['lateralDelay'].lateralDelay:.3f} s")
+        measured = ui_state.measured_steer_delay()
+        self._steer_delay.set_value("calibrating" if measured is None else f"measured {measured:.3f} s")
       except Exception:
         self._steer_delay.set_value("")
       return
