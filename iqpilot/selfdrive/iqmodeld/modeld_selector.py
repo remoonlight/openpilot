@@ -110,7 +110,10 @@ def wait_for_big(big_channel, target: int, deadline: float, min_frame: int = -1,
   big_peek = None
   grab_at = deadline - 0.004
   while time.perf_counter() < deadline:
-    bfid = big_channel.peek_frame_id()
+    bfid, writing = big_channel.peek()
+    if writing:
+      time.sleep(0.0002)
+      continue
     big_peek = bfid
     if bfid == target - 1 and time.perf_counter() < grab_at:
       time.sleep(0.0005)
@@ -119,7 +122,8 @@ def wait_for_big(big_channel, target: int, deadline: float, min_frame: int = -1,
       got = big_channel.read()
       if got is not None and got[0] == bfid:
         return got[1], big_peek
-      break
+      time.sleep(0.0002)
+      continue
     if bfid is None or bfid <= min_frame or bfid > target + BIG_FUTURE_ACCEPT or target - bfid > max_lag_frames:
       break
     time.sleep(0.0005)
