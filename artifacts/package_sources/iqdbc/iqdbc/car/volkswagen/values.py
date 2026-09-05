@@ -339,6 +339,7 @@ class VolkswagenFlagsIQ(IntFlag):
 
 RADAR_DISABLE_STATE = {"error": False}
 
+MLB_MSG_LH_EPS_01 = 0x32A
 MLB_MSG_LH_EPS_03 = 0x9F
 MLB_MSG_GETRIEBE_01 = 0x82
 MLB_MSG_GETRIEBE_02 = 0x83

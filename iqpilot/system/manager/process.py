@@ -221,7 +221,6 @@ class BundleProcess(NativeProcess):
   def __init__(self, name, bundle, entry, should_run, enabled=True, sigkill=False, restart_if_crash=False):
     self.bundle = bundle
     self.entry = entry
-    self.restart_if_crash = restart_if_crash
     runner_path = preferred_runner_path()
     runner_cmd = str(runner_path) if runner_path.is_absolute() else "./iqpilot_bundle_runner"
     runner_cwd = ".iqpilot/runtime_root" if runner_path.is_absolute() else "system/proprietary_runtime"
@@ -238,6 +237,7 @@ class BundleProcess(NativeProcess):
       should_run=should_run,
       enabled=enabled,
       sigkill=sigkill,
+      restart_if_crash=restart_if_crash,
     )
 
   def start(self) -> None:

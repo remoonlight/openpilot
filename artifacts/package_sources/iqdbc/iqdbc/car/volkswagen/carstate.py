@@ -845,6 +845,7 @@ class CarState(CarStateBase):
       pt_messages += [
         ("Blinkmodi_01", math.nan),  # From J519 BCM (is inactive when no lights active, 50Hz when active)
         ("Kombi_02", math.nan),  # Auxiliary-bus cluster odometer
+        ("LH_EPS_01", math.nan),  # ALC key slot, absent on MLB racks that never send 0x32A
       ]
     else:
       pt_messages += [("Kombi_02", math.nan)]  # Auxiliary-bus cluster odometer

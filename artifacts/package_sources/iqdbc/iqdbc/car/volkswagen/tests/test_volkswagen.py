@@ -10,8 +10,8 @@ from iqdbc.car.volkswagen.carstate import CarState
 from iqdbc.car.structs import CarParams
 from iqdbc.car.volkswagen.interface import CarInterface
 from iqdbc.car.volkswagen.values import (CAR, FW_QUERY_CONFIG, MLB_ACC_COORDINATOR_MSGS, MLB_GEARBOX_MSGS, MLB_MSG_ACC_10,
-                                         MLB_MSG_GATEWAY_05, MLB_MSG_GETRIEBE_01, MLB_MSG_LH_EPS_03, WMI, VolkswagenFlags,
-                                         VolkswagenFlagsIQ, VolkswagenSafetyFlags)
+                                         MLB_MSG_GATEWAY_05, MLB_MSG_GETRIEBE_01, MLB_MSG_LH_EPS_01, MLB_MSG_LH_EPS_03,
+                                         WMI, VolkswagenFlags, VolkswagenFlagsIQ, VolkswagenSafetyFlags)
 from iqdbc.car.volkswagen.fingerprints import FW_VERSIONS
 
 Ecu = CarParams.Ecu
@@ -210,7 +210,6 @@ def _a4_mk4_frames(packer, reverse=False, eps_torque=None):
     packer.make_can_msg("Kombi_02", 1, {"KBI_Inhalt_Tank": 40, "KBI_Kilometerstand": 100000}),
     packer.make_can_msg("Airbag_02", 1, {"AB_Gurtschloss_FA": 3}),
     packer.make_can_msg("Gateway_05", 1, {"BCM1_Rueckfahrlicht_Schalter": int(reverse)}),
-    packer.make_can_msg("LH_EPS_01", 1, {}),
   ]
   if eps_torque is not None:
     msgs.append(packer.make_can_msg("LH_EPS_03", 1, {"EPS_Lenkmoment": abs(eps_torque),
@@ -497,6 +496,32 @@ def test_mlb_manual_gateway_car_adds_only_the_reverse_switch_on_the_powertrain_b
   assert manual[Bus.pt] == automatic[Bus.pt]
   assert manual[Bus.cam] == automatic[Bus.cam]
   assert manual[Bus.aux] == automatic[Bus.aux] | {MLB_MSG_GATEWAY_05}
+
+
+def _read_like_the_alc_runtime(parser, name):
+  # the closed-source ALC reads its key slot through parser.vl, which subscribes the message on first access
+  if name not in parser.dat:
+    parser.vl[name]
+  return parser.dat.get(name, b"")
+
+
+@pytest.mark.parametrize("build", (_a4_mk4_car, _q5_mk1_car), ids=("a4_mk4", "q5_mk1"))
+def test_mlb_alc_key_slot_read_keeps_can_valid_on_a_rack_that_never_sends_it(build):
+  car = build()
+  subscribed = _subscribed_addresses(car)
+  never_sent = {bus: addrs - {MLB_MSG_LH_EPS_01} for bus, addrs in subscribed.items()}
+
+  packer = CANPacker("vw_mlb")
+
+  def build_frames():
+    _read_like_the_alc_runtime(car.can_parsers[Bus.pt], "LH_EPS_01")
+    return _frames_for(car, packer, never_sent)
+
+  ret = _run_past_aliveness_timeout(car, build_frames)
+
+  assert ret.canValid
+  assert all(parser.can_valid for parser in car.can_parsers.values())
+  assert not any(parser.bus_timeout for parser in car.can_parsers.values())
 
 
 @pytest.mark.parametrize("build", (_a4_mk4_car, _q5_mk1_car), ids=("a4_mk4", "q5_mk1"))

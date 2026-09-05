@@ -361,6 +361,10 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
 
     // iqpilot model params
     {"CameraOffset", {PERSISTENT, FLOAT, "0.0"}},
+    // Dev gate for the Android nav stack. Off by default and only konn3kt dev-flagged devices
+    // (or a developer, by hand) set it. navassist stays fully dormant unless this AND IQAndroidNav
+    // are both set, so a non-dev forcing IQAndroidNav=1 does nothing — the container never starts.
+    {"IQNavAssistDev", {PERSISTENT, BOOL, "0"}},
     {"IQAndroidNav", {PERSISTENT, BOOL, "0"}},
     {"IQAndroidNavStatus", {PERSISTENT, STRING}},
     // "waze" or "maps": exactly one runs, the other is disabled outright.

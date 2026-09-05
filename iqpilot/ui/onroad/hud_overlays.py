@@ -28,105 +28,98 @@ def _speed_scale() -> float:
   return CV.MS_TO_KPH if ui_state.is_metric else CV.MS_TO_MPH
 
 
-_STRIP_WIDTH = 28
-_STRIP_INSET = 14
-_STRIP_CEILING = 0.85
-_STRIP_EMA = 5.0
-_STRIP_ARC_SEGMENTS = 24
-_STRIP_ACCEL = (33, 112, 115)
-_STRIP_ACCEL_NEON = (94, 232, 236)
-_STRIP_DECEL = (255, 0, 247)
-_STRIP_DECEL_NEON = (255, 145, 251)
-_STRIP_TIP_ALPHA = 235
-_STRIP_ROOT_ALPHA = 55
-_STRIP_CORE_DEPTH = 7.0
-_STRIP_CORE_LAYERS = 8
-_STRIP_CORE_ALPHA = 0.15
-_STRIP_CORE_FLOOR = 0.3
-_STRIP_CORE_TAIL = 22.0
-_STRIP_HALO_SPREAD = 11.0
-_STRIP_HALO_LAYERS = 11
-_STRIP_HALO_ALPHA = 0.095
-_STRIP_HALO_TAIL = 34.0
-_STRIP_NEON_FULL = 2.0
+_ACCEL_METER_INSET = 18.0
+_ACCEL_METER_WIDTH = 16.0
+_ACCEL_METER_BACKDROP_WIDTH = 42.0
+_ACCEL_METER_HEIGHT = 0.5
+_ACCEL_METER_MAX_HEIGHT = 520.0
+_ACCEL_METER_DEADBAND = 0.12
+_ACCEL_METER_FULL_SCALE = 3.0
+_ACCEL_METER_ATTACK_TAU = 0.08
+_ACCEL_METER_RELEASE_TAU = 0.35
+_ACCEL_METER_ACCEL_ROOT = (0, 178, 169)
+_ACCEL_METER_ACCEL_TIP = (54, 255, 232)
+_ACCEL_METER_BRAKE_ROOT = (196, 32, 139)
+_ACCEL_METER_BRAKE_TIP = (255, 86, 202)
+_ACCEL_METER_GLOW = ((8.0, 18), (5.0, 28), (2.5, 42))
 
 
 class IQAccelBar:
   def __init__(self):
-    self._eased = 0.0
-
-  def _reach(self) -> float:
-    mag = abs(self._eased)
-    return 0.0 if mag == 0.0 else max(0.0, _STRIP_CEILING - 0.1 / mag)
+    self._shown = 0.0
+    self._last_frame = time.monotonic()
 
   @staticmethod
-  def _tint(fill, frac: float):
-    return canvas.shade(*fill, int(_STRIP_TIP_ALPHA + (_STRIP_ROOT_ALPHA - _STRIP_TIP_ALPHA) * frac))
+  def _normalized(acceleration: float) -> float:
+    magnitude = abs(acceleration)
+    if magnitude <= _ACCEL_METER_DEADBAND:
+      return 0.0
+    return float(np.clip(
+      (magnitude - _ACCEL_METER_DEADBAND) / (_ACCEL_METER_FULL_SCALE - _ACCEL_METER_DEADBAND),
+      0.0,
+      1.0,
+    ))
 
   @staticmethod
-  def _halo(center, cap: float, up: bool, neon, heat: float, tail: float) -> None:
-    step = int(255 * _STRIP_HALO_ALPHA * heat)
-    if step < 1:
-      return
-    start, end = (180.0, 360.0) if up else (0.0, 180.0)
-    tint = canvas.shade(*neon, step)
-    faded = canvas.shade(*neon, 0)
-    top, bottom = (tint, faded) if up else (faded, tint)
-    for i in range(_STRIP_HALO_LAYERS):
-      spread = _STRIP_HALO_SPREAD * (1.0 - i / _STRIP_HALO_LAYERS)
-      if spread <= 0.0:
-        continue
-      canvas.annulus(center, cap, cap + spread, start, end, _STRIP_ARC_SEGMENTS, tint)
-      if tail <= 0.0:
-        continue
-      run = min(tail, _STRIP_HALO_TAIL)
-      y = center.y if up else center.y - run
-      canvas.v_sweep(center.x - cap - spread, y, spread, run, top, bottom)
-      canvas.v_sweep(center.x + cap, y, spread, run, top, bottom)
+  def _next_value(shown: float, target: float, dt: float) -> float:
+    growing = abs(target) > abs(shown) or shown * target < 0.0
+    tau = _ACCEL_METER_ATTACK_TAU if growing else _ACCEL_METER_RELEASE_TAU
+    alpha = 1.0 - math.exp(-max(0.0, dt) / tau)
+    value = shown + (target - shown) * alpha
+    return 0.0 if abs(value) < 0.005 and abs(target) <= _ACCEL_METER_DEADBAND else value
 
   @staticmethod
-  def _cap(center, cap: float, up: bool, fill, neon, heat: float, tail: float) -> None:
-    start, end = (180.0, 360.0) if up else (0.0, 180.0)
-    canvas.annulus(center, 0.0, cap, start, end, _STRIP_ARC_SEGMENTS, fill)
-    IQAccelBar._halo(center, cap, up, neon, heat, tail)
-    lit = _STRIP_CORE_FLOOR + (1.0 - _STRIP_CORE_FLOOR) * heat
-    core = canvas.shade(*neon, max(1, int(255 * _STRIP_CORE_ALPHA * lit)))
-    faded = canvas.shade(*neon, 0)
-    top, bottom = (core, faded) if up else (faded, core)
-    run = min(tail, _STRIP_CORE_TAIL)
-    for i in range(_STRIP_CORE_LAYERS):
-      depth = _STRIP_CORE_DEPTH * (1.0 - i / _STRIP_CORE_LAYERS)
-      if depth <= 0.0:
-        continue
-      canvas.annulus(center, max(0.0, cap - depth), cap, start, end, _STRIP_ARC_SEGMENTS, core)
-      if run <= 0.0:
-        continue
-      y = center.y if up else center.y - run
-      canvas.v_sweep(center.x - cap, y, depth, run, top, bottom)
-      canvas.v_sweep(center.x + cap - depth, y, depth, run, top, bottom)
+  def _gradient(y: float, height: float, width: float, x: float, accelerating: bool, root, tip, alpha: int) -> None:
+    root_color = canvas.shade(*root, max(1, int(alpha * 0.56)))
+    tip_color = canvas.shade(*tip, alpha)
+    top, bottom = (tip_color, root_color) if accelerating else (root_color, tip_color)
+    canvas.v_sweep(x, y, width, height, top, bottom)
+
+  @staticmethod
+  def _fill(x: float, y: float, width: float, height: float, accelerating: bool, root, tip) -> None:
+    for spread, alpha in _ACCEL_METER_GLOW:
+      IQAccelBar._gradient(y, height, width + spread * 2.0, x - spread, accelerating, root, tip, alpha)
+    IQAccelBar._gradient(y, height, width, x, accelerating, root, tip, 235)
+    center_x = x + width / 2.0
+    tip_y = y if accelerating else y + height
+    canvas.disc(center_x, tip_y, width / 2.0 + 1.0, canvas.shade(*tip, 242))
+    canvas.v_sweep(x + width * 0.38, y, width * 0.24, height,
+                   canvas.shade(255, 255, 255, 92 if accelerating else 24),
+                   canvas.shade(255, 255, 255, 24 if accelerating else 92))
 
   def render(self, rect, sm) -> None:
     if not ui_state.rocket_fuel:
       return
-    self._eased += (sm['carState'].aEgo - self._eased) / _STRIP_EMA
-    reach = self._reach() * rect.height / 2.0
-    if reach <= 0.0:
-      return
-    accelerating = self._eased > 0.0
-    mid = rect.y + rect.height / 2.0
-    top = mid - reach if accelerating else mid
-    x = rect.x + _STRIP_INSET
-    cap = min(_STRIP_WIDTH / 2.0, reach / 2.0)
-    fill, neon = (_STRIP_ACCEL, _STRIP_ACCEL_NEON) if accelerating else (_STRIP_DECEL, _STRIP_DECEL_NEON)
-    near = cap / reach
-    frac_top, frac_bottom = (near, 1.0 - near) if accelerating else (1.0 - near, near)
-    heat = min(abs(self._eased) / _STRIP_NEON_FULL, 1.0)
+    now = time.monotonic()
+    dt = min(max(now - self._last_frame, 1.0 / 120.0), 0.1)
+    self._last_frame = now
+    target = float(np.clip(sm['carState'].aEgo, -_ACCEL_METER_FULL_SCALE, _ACCEL_METER_FULL_SCALE))
+    self._shown = self._next_value(self._shown, target, dt)
 
-    canvas.v_sweep(x, top + cap, cap * 2.0, reach - cap * 2.0,
-                   self._tint(fill, frac_top), self._tint(fill, frac_bottom))
-    tail = max(0.0, reach / 2.0 - cap)
-    self._cap(canvas.Pt(x + cap, top + cap), cap, True, self._tint(fill, frac_top), neon, heat, tail)
-    self._cap(canvas.Pt(x + cap, top + reach - cap), cap, False, self._tint(fill, frac_bottom), neon, heat, tail)
+    track_height = min(rect.height * _ACCEL_METER_HEIGHT, _ACCEL_METER_MAX_HEIGHT)
+    mid = rect.y + rect.height / 2.0
+    track_y = mid - track_height / 2.0
+    backdrop_x = rect.x + _ACCEL_METER_INSET
+    track_x = backdrop_x + (_ACCEL_METER_BACKDROP_WIDTH - _ACCEL_METER_WIDTH) / 2.0
+    canvas.panel(rl.Rectangle(backdrop_x, track_y - 10.0, _ACCEL_METER_BACKDROP_WIDTH, track_height + 20.0),
+                 0.48, 18, canvas.shade(0, 8, 13, 108))
+    canvas.panel_outline(rl.Rectangle(backdrop_x, track_y - 10.0, _ACCEL_METER_BACKDROP_WIDTH, track_height + 20.0),
+                         0.48, 18, 1.0, canvas.shade(126, 245, 238, 34))
+    canvas.panel(rl.Rectangle(track_x, track_y, _ACCEL_METER_WIDTH, track_height),
+                 0.5, 14, canvas.shade(210, 245, 242, 25))
+
+    normalized = self._normalized(self._shown)
+    if normalized > 0.0:
+      accelerating = self._shown > 0.0
+      reach = normalized * (track_height / 2.0 - _ACCEL_METER_WIDTH / 2.0)
+      fill_y = mid - reach if accelerating else mid
+      root, tip = ((_ACCEL_METER_ACCEL_ROOT, _ACCEL_METER_ACCEL_TIP) if accelerating else
+                   (_ACCEL_METER_BRAKE_ROOT, _ACCEL_METER_BRAKE_TIP))
+      self._fill(track_x, fill_y, _ACCEL_METER_WIDTH, reach, accelerating, root, tip)
+
+    canvas.slab(backdrop_x + 6.0, mid - 1.0, _ACCEL_METER_BACKDROP_WIDTH - 12.0, 2.0,
+                canvas.shade(236, 255, 253, 205))
+    canvas.disc(track_x + _ACCEL_METER_WIDTH / 2.0, mid, 3.0, canvas.shade(255, 255, 255, 238))
 
 _BS_INSET = 20
 _BS_DROP = 100

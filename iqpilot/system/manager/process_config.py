@@ -68,7 +68,7 @@ def always_run(started: bool, params: Params, CP: car.CarParams) -> bool:
   return True
 
 def nav_assist(started: bool, params: Params, CP: car.CarParams) -> bool:
-  return params.get_bool("IQAndroidNav")
+  return params.get_bool("IQNavAssistDev") and params.get_bool("IQAndroidNav")
 
 def only_onroad(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started
