@@ -70,6 +70,21 @@ iq() {
 IQFN
 }
 
+function ensure_cn_ntp {
+  # Ubuntu NTP often gets zero packets in CN; Konn3kt JWT then looks expired.
+  local src="$DIR/iqpilot/system/hardware/tici/timesyncd-cn.conf"
+  local dst="/etc/systemd/timesyncd.conf.d/cn.conf"
+  [ -f "$src" ] || return 0
+  if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+    return 0
+  fi
+  sudo mount -o remount,rw /
+  sudo mkdir -p /etc/systemd/timesyncd.conf.d
+  sudo cp "$src" "$dst"
+  sudo mount -o remount,ro / || true
+  sudo systemctl restart systemd-timesyncd || true
+}
+
 function agnos_init {
   # TODO: move this to agnos
   sudo rm -f /data/etc/NetworkManager/system-connections/*.nmmeta
@@ -90,6 +105,8 @@ function agnos_init {
     sudo ln -sf /usr/sbin/iptables-legacy-save /etc/alternatives/iptables-save
     sudo mount -o remount,ro /
   fi
+
+  ensure_cn_ntp
 
   # Check if AGNOS update is required
   CURRENT_AGNOS_VERSION=$(< /VERSION)
