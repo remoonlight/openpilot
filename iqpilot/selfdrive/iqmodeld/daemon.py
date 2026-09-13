@@ -39,6 +39,7 @@ from iqpilot.selfdrive.iqmodeld.models.inference_state import InferenceStateBase
 from iqpilot.selfdrive.iqmodeld.models.runners.model_runner import get_model_runner
 from iqpilot.selfdrive.iqmodeld.camera import CameraOffsetHelper
 from iqpilot.selfdrive.iqmodeld.config import Plan
+from iqpilot.selfdrive.iqmodeld.sof_pair import _SOF_PAIR_MAX_STEPS, sof_pair_action
 from iqpilot.selfdrive.iqmodeld.messaging import (
   DrivePacketMemory,
   pick_curvature,
@@ -399,21 +400,31 @@ class CameraIngress:
     if not self.layout.dual_camera:
       return main_buf, main_buf, main_stamp, main_stamp
 
-    while True:
-      wide_buf = self._secondary.recv()
-      wide_stamp = CaptureStamp.from_vipc(self._secondary)
-      if wide_buf is None or main_stamp.timestamp_sof < wide_stamp.timestamp_sof + 25000000:
-        break
-
+    wide_buf = self._secondary.recv()
+    wide_stamp = CaptureStamp.from_vipc(self._secondary)
     if wide_buf is None:
       return None
 
-    if abs(main_stamp.timestamp_sof - wide_stamp.timestamp_sof) > 10000000:
-      cloudlog.error(
-        f"frames out of sync! main: {main_stamp.frame_id} ({main_stamp.timestamp_sof / 1e9:.5f}),"
-        f" extra: {wide_stamp.frame_id} ({wide_stamp.timestamp_sof / 1e9:.5f})"
-      )
-    return main_buf, wide_buf, main_stamp, wide_stamp
+    for _ in range(_SOF_PAIR_MAX_STEPS):
+      action = sof_pair_action(main_stamp.timestamp_sof, wide_stamp.timestamp_sof)
+      if action == 0:
+        return main_buf, wide_buf, main_stamp, wide_stamp
+      if action < 0:
+        main_buf = self._primary.recv()
+        main_stamp = CaptureStamp.from_vipc(self._primary)
+        if main_buf is None:
+          return None
+      else:
+        wide_buf = self._secondary.recv()
+        wide_stamp = CaptureStamp.from_vipc(self._secondary)
+        if wide_buf is None:
+          return None
+
+    cloudlog.error(
+      f"frames out of sync! main: {main_stamp.frame_id} ({main_stamp.timestamp_sof / 1e9:.5f}),"
+      f" extra: {wide_stamp.frame_id} ({wide_stamp.timestamp_sof / 1e9:.5f})"
+    )
+    return None
 
 
 class CalibrationAtlas:
