@@ -82,6 +82,13 @@ class TestManager:
 
     signal_mock.assert_called_once_with(signal.SIGTERM)
 
+  def test_native_process_signal_kills_group(self, mocker):
+    proc = NativeProcess("test", ".", ["true"], lambda *_: True)
+    proc.proc = mocker.Mock(exitcode=None, pid=4242)
+    killpg = mocker.patch("os.killpg")
+    proc.signal(signal.SIGKILL)
+    killpg.assert_called_once_with(4242, signal.SIGKILL)
+
   def test_native_process_stop_timeout(self, mocker):
     proc = NativeProcess("test", ".", ["true"], lambda *_: True)
     native_process = mocker.Mock(exitcode=None, pid=123)

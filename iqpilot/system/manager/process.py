@@ -63,8 +63,7 @@ def launcher(proc: str, name: str) -> None:
 
 def nativelauncher(pargs: list[str], cwd: str, name: str) -> None:
   os.environ['MANAGER_DAEMON'] = name
-
-  # exec the process
+  os.setsid()
   os.chdir(cwd)
   os.environ['PWD'] = cwd
   os.execvp(pargs[0], pargs)
@@ -172,6 +171,17 @@ class NativeProcess(ManagerProcess):
     self.sigkill = sigkill
     self.launcher = nativelauncher
     self.restart_if_crash = restart_if_crash
+
+  def signal(self, sig: int) -> None:
+    if self.proc is None or self.proc.pid is None:
+      return
+    if self.proc.exitcode is not None:
+      return
+    cloudlog.info(f"sending signal {sig} to {self.name} process group")
+    try:
+      os.killpg(self.proc.pid, sig)
+    except OSError:
+      os.kill(self.proc.pid, sig)
 
   def prepare(self) -> None:
     pass
