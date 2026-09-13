@@ -482,6 +482,9 @@ class CarController(CarControllerBase):
         )
         if CS.out.gasPressed and (CS.esp_hold_confirmation or CS.out.vEgo <= 0.75):
           starting = True
+        stopping = mebcan.compute_meb_finish_stop(
+          starting, stopping, CS.out.vEgo, accel, CS.esp_hold_confirmation,
+        )
 
         long_override = CC.cruiseControl.override or CS.out.gasPressed
 

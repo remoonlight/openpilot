@@ -114,6 +114,18 @@ if ! tar -xzf "$package" -C "$root"; then
   echo "overlay extraction failed; restored $backup" >&2
   exit 1
 fi
+vw_src="$root/artifacts/package_sources/iqdbc/iqdbc/car/volkswagen"
+for venv in "$root/.venv" /usr/local/venv; do
+  dest="$venv/lib/python3.12/site-packages/iqdbc/car/volkswagen"
+  if [ -d "$dest" ] && [ -d "$vw_src" ]; then
+    for f in carcontroller.py carstate.py mebcan.py; do
+      [ -f "$vw_src/$f" ] || continue
+      cp -p "$vw_src/$f" "$dest/$f"
+    done
+    rm -f "$dest"/__pycache__/carcontroller* "$dest"/__pycache__/carstate* "$dest"/__pycache__/mebcan*
+    echo "synced iqdbc volkswagen into $dest"
+  fi
+done
 rm -rf "$stage" "$package"
 echo "IQ-link overlay installed. Backup: $backup"
 echo "Rollback: copy backup files back under $root, then remove paths in $backup/new-files.txt"

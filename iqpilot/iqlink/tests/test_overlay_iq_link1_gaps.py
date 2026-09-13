@@ -25,13 +25,14 @@ def test_meb_tsk_hard_brake_overlay():
   # Inline the same mapping as CarState.meb_tsk_cruise_flags (avoid importing iqdbc).
   MEB_TEMP = 6
 
-  def flags(tsk, standstill, esp_hold, was_enabled, near_standstill=False, driver_braking=False):
+  def flags(tsk, standstill, esp_hold, was_enabled, near_standstill=False, driver_braking=False,
+            stop_overlay=False, hard_stop_overlay=False):
     temp_fault = tsk == MEB_TEMP
     hard_fault = tsk == 7
     hold = standstill or esp_hold or (near_standstill and was_enabled)
-    temp_at_hold = temp_fault and hold
+    temp_at_hold = temp_fault and (hold or (stop_overlay and was_enabled))
     temp_brake_overlay = temp_fault and driver_braking
-    hard_at_hold = hard_fault and hold and was_enabled
+    hard_at_hold = hard_fault and was_enabled and (hold or hard_stop_overlay)
     standstill_temp = temp_at_hold or hard_at_hold
     if tsk in (3, 4, 5):
       was_enabled = True
@@ -49,8 +50,19 @@ def test_meb_tsk_hard_brake_overlay():
   assert available is True
   faulted, _, _, _ = flags(6, False, False, True, driver_braking=False)
   assert faulted is True
+  faulted, available, enabled, _ = flags(6, False, False, True, driver_braking=False, stop_overlay=True)
+  assert faulted is False
+  assert available is True
+  assert enabled is True
   faulted, _, _, _ = flags(7, False, False, True, driver_braking=True)
   assert faulted is True
+  faulted, _, _, _ = flags(7, False, False, True, stop_overlay=True)
+  assert faulted is True
+  faulted, available, enabled, was_enabled = flags(7, False, False, True, hard_stop_overlay=True)
+  assert faulted is False
+  assert available is True
+  assert enabled is True
+  assert was_enabled is True
 
 
 def test_settings_includes_iqlink_bluetooth_tile():

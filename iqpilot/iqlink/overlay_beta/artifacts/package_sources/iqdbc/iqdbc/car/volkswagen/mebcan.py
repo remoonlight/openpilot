@@ -177,7 +177,7 @@ def compute_meb_long_starting(long_control_state, v_ego, v_ego_starting, esp_hol
         return True
   # iq-link1: only auto-start when not still commanding a brake. Planner holds
   # a<=0 / shouldStop while !nav_go; IQlink nav_go yields positive a → start.
-  if accel < 0:
+  if accel <= 0:
     return False
   state_name = getattr(long_control_state, "name", None) or str(long_control_state)
   return (
@@ -185,6 +185,19 @@ def compute_meb_long_starting(long_control_state, v_ego, v_ego_starting, esp_hol
     and v_ego <= v_ego_starting
     and (esp_hold_confirmation or not stopping)
   )
+
+
+def compute_meb_finish_stop(starting, stopping, v_ego, accel, esp_hold, v_finish=1.2):
+  """Latch HMS HOLD through the last meters.
+
+  If longControl stays in pid at creep, ACC_Anforderung_HMS goes NO_REQUEST,
+  the car never stops, then stock TSK=7 raises Cruise Fault.
+  """
+  if starting:
+    return False
+  if stopping or esp_hold:
+    return True
+  return v_ego <= v_finish and accel <= 0.15
 
 
 def acc_hold_type(main_switch_on, acc_faulted, long_active, starting, stopping, esp_hold, v_ego,

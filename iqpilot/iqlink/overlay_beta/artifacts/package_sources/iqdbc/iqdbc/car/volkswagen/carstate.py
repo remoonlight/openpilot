@@ -29,17 +29,22 @@ class CarState(CarStateBase):
   MEB_TEMP_CRUISE_FAULT = 6
   MEB_TOLERANCE_MAX = 100
   MEB_CREEP_HOLD_V = 0.75
+  # Stock TSK=6 during OP auto-stop shows up around 11 km/h, before creep/hold.
+  MEB_STOP_OVERLAY_V = 8.0
+  # Stock TSK=7 at a completed stop often beats ESP hold / vEgoRaw==0 by a frame.
+  MEB_HARD_STOP_V = 2.0
   MEB_BRAKE_OVERLAY_FRAMES = 300
 
   @classmethod
   def meb_tsk_cruise_flags(cls, tsk_status, standstill, esp_hold, was_enabled, *,
-                           near_standstill: bool = False, driver_braking: bool = False):
+                           near_standstill: bool = False, driver_braking: bool = False,
+                           stop_overlay: bool = False, hard_stop_overlay: bool = False):
     temp_fault = tsk_status == cls.MEB_TEMP_CRUISE_FAULT
     hard_fault = tsk_status == 7
     hold = standstill or esp_hold or (near_standstill and was_enabled)
-    temp_at_hold = temp_fault and hold
+    temp_at_hold = temp_fault and (hold or (stop_overlay and was_enabled))
     temp_brake_overlay = temp_fault and driver_braking
-    hard_at_hold = hard_fault and hold and was_enabled
+    hard_at_hold = hard_fault and was_enabled and (hold or hard_stop_overlay)
     standstill_temp = temp_at_hold or hard_at_hold
     if tsk_status in (3, 4, 5):
       was_enabled = True
@@ -415,10 +420,13 @@ class CarState(CarStateBase):
       self._meb_brake_overlay_frames = self.MEB_BRAKE_OVERLAY_FRAMES
     elif self._meb_brake_overlay_frames > 0:
       self._meb_brake_overlay_frames -= 1
+    stopped = ret.vEgo < self.MEB_HARD_STOP_V or ret.vEgoRaw < self.MEB_HARD_STOP_V
     acc_faulted, available, enabled, self._meb_long_was_enabled = self.meb_tsk_cruise_flags(
       tsk_status, ret.standstill, self.esp_hold_confirmation, self._meb_long_was_enabled,
       near_standstill=ret.vEgo < self.MEB_CREEP_HOLD_V,
       driver_braking=ret.brakePressed or self._meb_brake_overlay_frames > 0,
+      stop_overlay=ret.vEgo < self.MEB_STOP_OVERLAY_V,
+      hard_stop_overlay=stopped,
     )
     ret.cruiseState.available = available
     ret.cruiseState.enabled = enabled
