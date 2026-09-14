@@ -13,7 +13,7 @@ from iqpilot.selfdrive.controls.lib.longcontrol import LongCtrlState
 from iqpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import LongitudinalMpc, LongitudinalPlanSource
 from iqpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import T_IDXS as T_IDXS_MPC
 from iqpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N, DEFAULT_STOPPING_SPEED, get_accel_from_plan
-from iqpilot.selfdrive.car.cruise import V_CRUISE_MAX, V_CRUISE_UNSET
+from iqpilot.selfdrive.car.cruise import ButtonType, V_CRUISE_MAX, V_CRUISE_UNSET
 from iqpilot.common.swaglog import cloudlog
 from iqpilot.common.issue_debug import log_issue_limited
 
@@ -37,6 +37,11 @@ E2E_CRUISE_ACCEL_MAX = 0.5
 E2E_MODEL_SPEED_HORIZON = 5.0
 E2E_ACCEL_INTENT_BP = [-0.05, 0.05]
 E2E_MODEL_SPEED_INTENT_BP = [-0.5, 0.0]
+
+LEAD_HOLD_GAP = 5.0
+LEAD_HOLD_V_ARM = 0.3
+LEAD_HOLD_V_RELEASE = 0.5
+LEAD_HOLD_OVERRIDE_T = 3.0
 
 # Lookup table for turns
 _A_TOTAL_MAX_V = [1.7, 3.2]
@@ -104,6 +109,14 @@ def get_accel_candidates(e2e, has_lead, mpc_candidate, cruise_candidate, e2e_can
   return candidates
 
 
+def stopped_lead_hold(prev_hold, v_ego, stopping_speed, lead_status, lead_d_rel, lead_v_lead, override_active) -> bool:
+  if override_active or not lead_status or lead_d_rel >= LEAD_HOLD_GAP:
+    return False
+  if prev_hold:
+    return lead_v_lead < LEAD_HOLD_V_RELEASE
+  return v_ego < stopping_speed and lead_v_lead < LEAD_HOLD_V_ARM
+
+
 class LongitudinalPlanner(LongitudinalPlannerIQ):
   def __init__(self, CP, CP_IQ, init_v=0.0, init_a=0.0, dt=DT_MDL):
     self.CP = CP
@@ -119,6 +132,8 @@ class LongitudinalPlanner(LongitudinalPlannerIQ):
     self.a_cruise = init_a
     self.output_a_target = 0.0
     self.output_should_stop = False
+    self.lead_hold = False
+    self.lead_hold_override_t = 0.0
     self.launch_armed = False
     try:
       self.exp_speed_conv = Params().get_bool("expSpeedConv")
@@ -176,6 +191,8 @@ class LongitudinalPlanner(LongitudinalPlannerIQ):
       self.v_desired_filter.x = v_ego
       self.a_desired = np.clip(sm['carState'].aEgo, ACCEL_MIN, ACCEL_MAX)
       self.a_cruise = self.a_desired
+      self.lead_hold = False
+      self.lead_hold_override_t = 0.0
 
     # Prevent divergence, smooth in current v_ego
     self.v_desired_filter.x = max(0.0, self.v_desired_filter.update(v_ego))
@@ -246,7 +263,35 @@ class LongitudinalPlanner(LongitudinalPlannerIQ):
     output_a_target, self.mpc.source, _ = min(candidates, key=lambda c: c[0])
     self.output_should_stop = any(should_stop for _, _, should_stop in candidates)
 
-    self.output_should_stop = self.output_should_stop or self.forcing_stop
+    cs = sm['carState']
+    hold_override = bool(cs.gasPressed) or any(
+      be.pressed and be.type in (ButtonType.resumeCruise, ButtonType.setCruise) for be in cs.buttonEvents
+    )
+    if hold_override:
+      self.lead_hold_override_t = LEAD_HOLD_OVERRIDE_T
+    elif self.lead_hold_override_t > 0.0:
+      self.lead_hold_override_t = max(0.0, self.lead_hold_override_t - self.dt)
+
+    lead = sm['radarState'].leadOne
+    prev_hold = self.lead_hold
+    self.lead_hold = stopped_lead_hold(
+      prev_hold,
+      v_ego,
+      self.stopping_speed,
+      bool(lead.status),
+      float(lead.dRel),
+      float(lead.vLead),
+      self.lead_hold_override_t > 0.0,
+    )
+    if self.lead_hold and not prev_hold:
+      log_issue_limited(
+        "stopped_lead_hold",
+        "planner",
+        f"dRel={lead.dRel:.2f} vLead={lead.vLead:.2f} src={self.mpc.source}",
+        interval_sec=5.0,
+      )
+
+    self.output_should_stop = self.output_should_stop or self.forcing_stop or self.lead_hold
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
 
     self.a_desired = float(self.output_a_target)
