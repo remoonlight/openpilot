@@ -35,7 +35,7 @@ You need a compatible comma device, the correct harness, Wi-Fi, and a phone with
 | No green Bluetooth light | Toggle **Bluetooth** off and on, then pair again. |
 
 ### Settings and overlay tool
-Problem-specific keys (smooth steer, long increment): [`SETTINGS.md`](./SETTINGS.md).
+Problem-specific keys (smooth steer, long increment, map speed-limit off): [`SETTINGS.md`](./SETTINGS.md).
 [`comma_settings_public.json`](./comma_settings_public.json) is the **recommended snapshot from this comma** (redacted VW ID.3 2024–25 / IQ-link), not a dump for every car. Same platform: apply the file after overlay. Other cars: copy only the keys you intend to change. Helpers: [`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py), [`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py). Reboot after writing.
 
 From the repository root:
@@ -86,7 +86,7 @@ IQ-link 用低功耗蓝牙把 comma 与手机上的 IQ-link 程序连起来。�
 | 蓝牙无绿灯 | 关闭再开启 **蓝牙** 卡片，重新配对手机。 |
 
 ### 设置与部署工具
-按问题对照的键（平滑转向、纵向步进）见 [`SETTINGS.md`](./SETTINGS.md)。
+按问题对照的键（平滑转向、纵向步进、地图限速关闭）见 [`SETTINGS.md`](./SETTINGS.md)。
 [`comma_settings_public.json`](./comma_settings_public.json) 是这台 comma 上脱敏后的**建议配置**（大众 ID.3 2024–25 / IQ-link），不是所有车的通用备份。同平台 overlay 后建议整份套用；其他车只写入你要改的键。脚本：[`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py)、[`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py)。写完重启一次。
 
 在本仓库根目录：
@@ -213,7 +213,7 @@ ssh iq@10.10.10.205 '/usr/local/venv/bin/python /tmp/export_comma_settings_publi
     "IQForceStops": 1,
     "IQLaneTurnDesire": 1,
     "IQLaneTurnValue": 19.0,
-    "IQSpeedAssistMode": 1,
+    "IQSpeedAssistMode": 0,
     "IQSpeedAssistOffsetType": 0,
     "IQSpeedAssistPolicy": 3,
     "IQSpeedAssistValueOffset": 0,

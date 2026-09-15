@@ -129,7 +129,7 @@ class SLCVCruise:
     override_manual = (override_method == 0)
     override_set_speed = (override_method == 1)
 
-    speed_limit_mode = int(get_param_str("IQSpeedAssistMode", "1"))  # default: SpeedLimitMode.information
+    speed_limit_mode = int(get_param_str("IQSpeedAssistMode", "0"))  # default: SpeedLimitMode.off
     speed_limit_controller = get_param_bool("SpeedLimitController")
     show_speed_limits = get_param_bool("ShowSpeedLimits")
 

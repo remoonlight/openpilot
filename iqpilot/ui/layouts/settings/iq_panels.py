@@ -928,6 +928,9 @@ class CruiseLayout(Widget):
   def __init__(self):
     super().__init__()
     self._params = Params()
+    self._params.put("IQSpeedAssistMode", 0)
+    self._params.put_bool("SpeedLimitController", False)
+    self._params.put_bool("ShowSpeedLimits", False)
     self._scroller = Scroller(self._initialize_items(), line_separator=True, spacing=0)
 
   @staticmethod
@@ -936,15 +939,6 @@ class CruiseLayout(Widget):
       title=lambda: tr(title),
       description=lambda: tr(description),
       action_item=IQToggleAction(initial_state=Params().get_bool(param), callback=lambda state: Params().put_bool(param, state), param=param),
-    )
-
-  @staticmethod
-  def _mode_item(title: str, description: str, param: str, labels: list[str], width: int, inline: bool = False):
-    return IQListItem(
-      title=lambda: tr(title),
-      description=lambda: tr(description),
-      action_item=IQMultipleButtonAction(buttons=[lambda s=s: tr(s) for s in labels], button_width=width, param=param),
-      inline=inline,
     )
 
   @staticmethod
@@ -977,79 +971,6 @@ class CruiseLayout(Widget):
       return "Stock" if value == 0 else f"{value:+d} m"
 
     items = [
-      IQListItem(title=lambda: tr("Speed Limit Control"), description="", action_item=None, inline=True,
-                 title_color=rl.Color(16, 185, 169, 255)),
-      IQLineSeparator(20),
-      self._mode_item(
-        "IQ Speed Limit Mode",
-        "Choose how IQ.Pilot handles speed limit data. Control adjusts cruise speed. Warning only highlights overspeed.",
-        "IQSpeedAssistMode",
-        ["Off", "Info", "Warn", "Control"],
-        180,
-      ),
-      self._mode_item(
-        "IQ SLC Policy",
-        "Select how IQ.Pilot resolves conflicting speed limit sources.",
-        "SLCPolicy",
-        ["Map", "Priority", "Combined"],
-        180,
-      ),
-      self._toggle_item(
-        "IQ SLC Confirm Higher",
-        "Require confirmation before IQ.Pilot accepts a higher detected speed limit.",
-        "SpeedLimitConfirmationHigher",
-      ),
-      self._toggle_item(
-        "IQ SLC Confirm Lower",
-        "Require confirmation before IQ.Pilot accepts a lower detected speed limit.",
-        "SpeedLimitConfirmationLower",
-      ),
-      self._toggle_item(
-        "IQ SLC Auto Confirm",
-        "Automatically accept speed limit changes after a 5-second timeout without requiring a cruise button press.",
-        "SLCAutoConfirm",
-      ),
-      self._toggle_item(
-        "IQ SLC Fallback Set Speed",
-        "If no speed limit is available, use the current set speed as the controller target.",
-        "SLCFallbackSetSpeed",
-      ),
-      self._toggle_item(
-        "IQ SLC Fallback Previous",
-        "If a new limit is denied, reuse the previous accepted speed limit when possible.",
-        "SLCFallbackPreviousSpeedLimit",
-      ),
-      self._toggle_item(
-        "IQ SLC Fallback Experimental",
-        "When no speed limit is available, let IQ.Dynamic request experimental longitudinal behavior.",
-        "SLCFallbackExperimentalMode",
-      ),
-      self._toggle_item(
-        "IQ SLC Online Filler",
-        "Use online sources (TomTom + Mapbox) to fill in missing speed limits when local map data is unavailable.",
-        "SLCOnlineFiller",
-      ),
-      self._option_item(
-        "IQ Map Lookahead Higher",
-        "How far ahead IQ.Pilot should apply an upcoming higher map speed limit before the limit changes.",
-        "MapSpeedLookaheadHigher",
-        100,
-        1000,
-        step=50,
-        use_float_scaling=True,
-        label_callback=seconds_label,
-      ),
-      self._option_item(
-        "IQ Map Lookahead Lower",
-        "How far ahead IQ.Pilot should apply an upcoming lower map speed limit before the limit changes.",
-        "MapSpeedLookaheadLower",
-        100,
-        1000,
-        step=50,
-        use_float_scaling=True,
-        label_callback=seconds_label,
-      ),
-      IQLineSeparator(60),
       IQListItem(title=lambda: tr("IQ.Dynamic"), description="", action_item=None, inline=True,
                  title_color=rl.Color(16, 185, 169, 255)),
       IQLineSeparator(20),

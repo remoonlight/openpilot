@@ -12,7 +12,7 @@ STORE_KEY = "IQSpeedAssistMode"
 # none -> just display the limit -> highlight overspeed -> move the set speed
 SpeedAssistTier = IntEnum("SpeedAssistTier", "DISABLED ADVISORY ALERTING ACTUATING", start=0)
 
-DEFAULT_TIER = SpeedAssistTier.ADVISORY
+DEFAULT_TIER = SpeedAssistTier.DISABLED
 
 
 def actuates_speed(tier) -> bool:

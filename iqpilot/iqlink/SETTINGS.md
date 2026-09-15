@@ -24,6 +24,18 @@ Device Params on this comma (VW ID.3 2024–25 / IQ-link). These are **problem-s
 
 These four keys are already in `comma_settings_public.json`. Re-apply that file if the device lost them.
 
+### Map speed-limit assist (off)
+
+Road limit comes from IQ-link BLE + APK. Map/SLC must stay off so it does not fight that path.
+
+| Key | Value | Meaning |
+|---|---|---|
+| `IQSpeedAssistMode` | `0` | off (no map info/warn/control) |
+| `SpeedLimitController` | `0` | do not move cruise from map/dashboard limits |
+| `ShowSpeedLimits` | `0` | no map-limit HUD |
+
+The Cruise menu no longer exposes Speed Limit / speed limit settings.
+
 ---
 
 ## 中文
@@ -49,3 +61,15 @@ These four keys are already in `comma_settings_public.json`. Re-apply that file 
 | `IsMetric` | `1` | 本车用公里 |
 
 这四项已在 `comma_settings_public.json`。设备丢了就重新套用该文件。
+
+### 地图限速辅助（关）
+
+路限由 IQ-link 蓝牙 + 手机程序提供。地图/SLC 必须关掉，避免跟这条路径抢控速。
+
+| 键 | 值 | 含义 |
+|---|---|---|
+| `IQSpeedAssistMode` | `0` | 关（不显示、不警告、不改巡航） |
+| `SpeedLimitController` | `0` | 不用地图/仪表限速改巡航 |
+| `ShowSpeedLimits` | `0` | 不显示地图限速 HUD |
+
+Cruise 菜单不再出现 Speed Limit / speed limit settings。

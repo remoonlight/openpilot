@@ -442,7 +442,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"OsmWayTest", {PERSISTENT, STRING}},
     {"RoadName", {CLEAR_ON_ONROAD_TRANSITION, STRING}},
     {"IQRoadNameOverlay", {PERSISTENT, BOOL, "0"}},
-    {"IQSpeedAssistMode", {PERSISTENT, INT, "1"}},
+    {"IQSpeedAssistMode", {PERSISTENT, INT, "0"}},
     {"IQSpeedAssistOffsetType", {PERSISTENT, INT, "0"}},
     {"IQSpeedAssistPolicy", {PERSISTENT, INT, "3"}},
     {"IQSpeedAssistValueOffset", {PERSISTENT, INT, "0"}},

@@ -30,9 +30,6 @@ DESCRIPTIONS = {
     "In relaxed mode IQ.Pilot will stay further away from lead cars. On supported cars, you can cycle through these personalities with " +
     "your steering wheel distance button."
   ),
-  "IQSpeedAssistMode": tr_noop(
-    "Controls IQ.Pilot speed limit behavior. Off disables speed limit features, Information only displays limits, Warning highlights overspeed, and Control adjusts set speed using detected limits."
-  ),
   "IsLdwEnabled": tr_noop(
     "Receive alerts to steer back into the lane when your vehicle drifts over a detected lane line " +
     "without a turn signal activated while driving over 31 mph (50 km/h)."
@@ -60,6 +57,10 @@ class TogglesLayout(Widget):
     self._params = Params()
     # Keep IQ.Pilot enabled by default; the UI no longer exposes this toggle.
     self._params.put_bool("OpenpilotEnabledToggle", True)
+    # Map/SLC is off; IQ-link BLE + APK own the road limit.
+    self._params.put("IQSpeedAssistMode", 0)
+    self._params.put_bool("SpeedLimitController", False)
+    self._params.put_bool("ShowSpeedLimits", False)
 
     # param, title, desc, icon, needs_restart
     self._toggle_defs = {
@@ -116,15 +117,6 @@ class TogglesLayout(Widget):
       selected_index=PERSONALITY_PARAM_TO_DISPLAY.get(self._params.get("LongitudinalPersonality", return_default=True), 1),
       icon="speed_limit.png"
     )
-    self._speed_limit_mode_setting = multiple_button_item(
-      lambda: tr("Speed Limit"),
-      lambda: tr(DESCRIPTIONS["IQSpeedAssistMode"]),
-      buttons=[lambda: tr("Off"), lambda: tr("Info"), lambda: tr("Warning"), lambda: tr("Control")],
-      button_width=220,
-      callback=self._set_speed_limit_mode,
-      selected_index=self._params.get("IQSpeedAssistMode", return_default=True),
-      icon="speed_limit.png",
-    )
     self._longitudinal_control_mode_setting = multiple_button_item(
       lambda: tr("Longitudinal Control"),
       lambda: tr(DESCRIPTIONS["LongitudinalControlMode"]),
@@ -139,7 +131,6 @@ class TogglesLayout(Widget):
     self._locked_toggles = set()
     self._toggles["LongitudinalControlMode"] = self._longitudinal_control_mode_setting
     self._toggles["LongitudinalPersonality"] = self._long_personality_setting
-    self._toggles["IQSpeedAssistMode"] = self._speed_limit_mode_setting
 
     for param, (title, desc, icon, needs_restart) in self._toggle_defs.items():
       initial_state = self._params.get_bool(param)
@@ -184,7 +175,6 @@ class TogglesLayout(Widget):
       if personality != ui_state.personality and ui_state.started:
         self._long_personality_setting.action_item.set_selected_button(PERSONALITY_PARAM_TO_DISPLAY.get(personality, 1))
       ui_state.personality = personality
-    self._speed_limit_mode_setting.action_item.set_selected_button(self._params.get("IQSpeedAssistMode", return_default=True))
 
   def _close_iq_dynamic_panel(self):
     self._show_iq_dynamic = False
@@ -313,9 +303,6 @@ class TogglesLayout(Widget):
 
   def _set_longitudinal_personality(self, button_index: int):
     self._params.put("LongitudinalPersonality", PERSONALITY_DISPLAY_TO_PARAM[button_index])
-
-  def _set_speed_limit_mode(self, button_index: int):
-    self._params.put("IQSpeedAssistMode", button_index)
 
   def _set_longitudinal_control_mode(self, button_index: int):
     # 0 = Stock ACC, 1 = IQ.Chill, 2 = IQ.Dynamic, 3 = IQ.Pilot

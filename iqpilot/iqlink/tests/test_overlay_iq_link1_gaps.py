@@ -71,6 +71,14 @@ def test_settings_includes_iqlink_bluetooth_tile():
   assert "IqlinkBigButton()" in src
 
 
+def test_cruise_hides_map_speed_limit_menu():
+  root = Path(__file__).resolve().parents[2]
+  src = (root / "selfdrive/ui/mici/layouts/settings/cruise.py").read_text(encoding="utf-8")
+  assert "speed limit settings" not in src.lower()
+  assert "MappedParamToggle(tr(\"Speed Limit\")" not in src
+  assert "IQSpeedAssistMode\", 0" in src or 'put("IQSpeedAssistMode", 0)' in src
+
+
 def test_nav_exec_floor():
   kph_to_ms = 1 / 3.6
   floor = 60.0 * kph_to_ms
@@ -84,5 +92,6 @@ if __name__ == "__main__":
   test_min_display_speed_limit()
   test_meb_tsk_hard_brake_overlay()
   test_settings_includes_iqlink_bluetooth_tile()
+  test_cruise_hides_map_speed_limit_menu()
   test_nav_exec_floor()
   print("ok")
