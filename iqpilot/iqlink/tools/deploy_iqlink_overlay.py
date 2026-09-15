@@ -58,7 +58,15 @@ FILES = (
    "iqpilot/selfdrive/ui/mici/layouts/settings/settings.py"),
   ("selfdrive/assets/icons/iq/bluetooth.png", "iqpilot/selfdrive/assets/icons/iq/bluetooth.png"),
   ("selfdrive/assets/icons/iq/bluetooth.png", "iqpilot/selfdrive/assets/icons_mici/iq/bluetooth.png"),
+  ("iqpilot/selfdrive/iqmodeld/daemon.py", "iqpilot/selfdrive/iqmodeld/daemon.py"),
+  ("iqpilot/selfdrive/iqmodeld/sof_pair.py", "iqpilot/selfdrive/iqmodeld/sof_pair.py"),
+  ("iqpilot/system/manager/process.py", "iqpilot/system/manager/process.py"),
 )
+
+# Wrapper execs daemon.py directly; do not use host os.access (Windows != device).
+EXECUTABLE_PATHS = frozenset({
+  "iqpilot/selfdrive/iqmodeld/daemon.py",
+})
 
 
 def package(output: Path) -> list[str]:
@@ -77,7 +85,8 @@ def package(output: Path) -> list[str]:
         member = f"{device_rel}{suffix}"
         data = path.read_bytes().replace(b"\r\n", b"\n") if path.suffix in {".py", ".h", ".capnp"} else path.read_bytes()
         info = tarfile.TarInfo(member)
-        info.size, info.mode = len(data), 0o644
+        info.size = len(data)
+        info.mode = 0o755 if member in EXECUTABLE_PATHS else 0o644
         archive.addfile(info, io.BytesIO(data))
         members.append(member)
   return members
