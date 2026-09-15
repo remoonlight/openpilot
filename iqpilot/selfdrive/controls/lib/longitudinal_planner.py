@@ -40,7 +40,6 @@ E2E_MODEL_SPEED_INTENT_BP = [-0.5, 0.0]
 
 LEAD_HOLD_GAP = 5.0
 LEAD_HOLD_V_ARM = 0.3
-LEAD_HOLD_V_RELEASE = 0.5
 LEAD_HOLD_OVERRIDE_T = 3.0
 
 # Lookup table for turns
@@ -113,7 +112,7 @@ def stopped_lead_hold(prev_hold, v_ego, stopping_speed, lead_status, lead_d_rel,
   if override_active or not lead_status or lead_d_rel >= LEAD_HOLD_GAP:
     return False
   if prev_hold:
-    return lead_v_lead < LEAD_HOLD_V_RELEASE
+    return True
   return v_ego < stopping_speed and lead_v_lead < LEAD_HOLD_V_ARM
 
 
