@@ -36,6 +36,13 @@ Road limit comes from IQ-link BLE + APK. Map/SLC must stay off so it does not fi
 
 The Cruise menu no longer exposes Speed Limit / speed limit settings.
 
+### IQ-link timeout behavior
+
+| Key | Meaning |
+|---|---|
+| `IqlinkWarnTimeoutS` | After this no-write interval, the bridge raises a link warning and the planner suppresses IQ-link longitudinal navigation. It does not clear the execution snapshot. |
+| `IqlinkCancelTimeoutS` | Legacy name only: it no longer clears navigation parameters and currently has no timeout action. Sticky parameters remain until changed content or Bluetooth is turned off. |
+
 ---
 
 ## 中文
@@ -73,3 +80,10 @@ The Cruise menu no longer exposes Speed Limit / speed limit settings.
 | `ShowSpeedLimits` | `0` | 不显示地图限速 HUD |
 
 Cruise 菜单不再出现 Speed Limit / speed limit settings。
+
+### IQ-link 超时行为
+
+| 键 | 含义 |
+|---|---|
+| `IqlinkWarnTimeoutS` | 超过该无写包时长，bridge 会告警，规划器会屏蔽 IQ-link 导航纵向；不会清执行快照。 |
+| `IqlinkCancelTimeoutS` | 仅为遗留名称：不再清导航参数，当前也没有超时动作；粘性参数会保留到内容变化或关闭蓝牙。 |

@@ -19,7 +19,7 @@ Notes:
 - There is **no** “cancel navigation” product control on the car.
 - Legacy param names such as `NavigationActive` / `IqlinkExclusive` are implementation leftovers — not product features.
 - **Connected (product / QA):** phone ↔ device can communicate = device HMAC `LinkState=2`. Phone GATT “connected” alone is not enough.
-- **Cereal on beta:** Gaode `trafficLight` / `trafficLightRemainS` are `IQNavState` **@62 / @63**. Konn3kt `beta` already uses @49–@61 for Mapbox traffic metadata. The release-based local tree still uses @49/@50.
+- **Cereal on beta:** Gaode `trafficLight` / `trafficLightRemainS` are `IQNavState` **@62 / @63**. This overlay targets the `beta` tree; do not use the release-tree `@49/@50` history as a field mapping.
 
 ## TBT icons (Gaode NEW_ICON → device bucket)
 
@@ -48,7 +48,7 @@ Deprecated (do not use as fallback): UDP 7705 / 7706, TCP 7713.
 - **Sticky limit (R1):** keep last limit / lights / TBT until the next change. Timeouts do **not** clear the snapshot.
 - **TBT distance:** no TBT speed cap. Turns / LC / exits keep road-limit `speedTarget`; curve slowdown is IQ.Dynamic. Lateral desire still fires in-window.
 - **Green wave / SDI:** not in scope (no phone uplink; device ignores).
-- **Road limit:** BLE reports raw `nRoadLimitSpeed` for HUD; execution = raw + device offset with a **usual floor of 60 km/h**. Invalid limit → do not invent; no snapshot → follow lead / model.
+- **Road limit:** BLE reports raw `nRoadLimitSpeed` for HUD; execution = raw + device offset with a **usual floor of 60 km/h**. `IQSpeedAssistValueOffset` has no UI today and is factually `0`; invalid limit → do not invent; no snapshot → follow lead / model.
 - **Traffic lights:** red/yellow aggressive decel toward stop (`accelTarget≈-2`); yellow near-distance treated like red; lead has priority; no fake green. Explicit `trafficLightRemainS` of **0 or 1** plus envelope clock aligned (`|now-ts|≤120s`) releases nav red-stop (`accelTarget≥0`). Omitted remainS keeps red stop until green. Never fake green.
 - **Lane B (gate only):** `KEY_TYPE=13012` → `laneRecommend`; `straight` suppresses auto lane-change desire. No lane-change HUD.
 - **Cruise UI:** product max set speed `V_CRUISE_PRODUCT_MAX_KPH=120`.
@@ -111,7 +111,8 @@ canonical_json = json.dumps(data, ensure_ascii=True, sort_keys=True, separators=
 
 - **产品**：车上无导航会话；IQ-link只推即时参数；停导不清参；已连 = 设备 `LinkState=2`。
 - **传输**：仅 BLE GATT；7705/7706/7713 已废弃。
-- **纵向**：变更驱动 + 粘限速；限速原值上报、执行侧常保底 60；红黄猛减速；remainS 0/1 且时钟对齐可放行；省略 remainS 保持红停；无绿波/SDI；车道 B 仅直行门控；无 TBT 压速。
+- **纵向**：变更驱动 + 粘限速；限速原值上报、执行侧常保底 60；`IQSpeedAssistValueOffset` 当前无 UI、事实为 0；红黄猛减速；remainS 0/1 且时钟对齐可放行；省略 remainS 保持红停；无绿波/SDI；车道 B 仅直行门控；无 TBT 压速。
 - **TBT**：lc* → fork，真出口 → exit；到站 150m 内只停横向 desire，HUD 出口提示另做档位/剩余距离门控。
+- **Cereal（beta）**：高德红绿灯字段为 `IQNavState @62/@63`；不要按 release 树历史的 `@49/@50` 映射。
 - **PSK**：固定 `999999`，设置页不显示。
 - **契约细节以上方英文为准**；字段以实现 `protocol.py` 为准。

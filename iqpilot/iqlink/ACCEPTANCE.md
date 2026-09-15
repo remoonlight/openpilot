@@ -18,7 +18,7 @@
 - **Limit HUD vs control:** BLE sends raw value; execution = base + offset, usual floor **≥60 km/h** (except red/yellow approach). Do not invent limits.
 - **Green wave / SDI:** out of scope — do not accept.
 - **TBT / curves:** no TBT distance speed cap (`speedTarget` stays at road limit; curves via IQ.Dynamic); lateral desire still in-window. `0 < nGoPosDist ≤ 150` must not send `send_lc` / `send_turn`.
-- **Arrive / reverse park:** must not spam exit-maneuver HUD (Chinese “导航：准备驶出匝道” / English `Navigation: Exit Maneuver`); a real highway exit may still prompt once. Limit/light snapshot stays after arrive.
+- **Arrive / reverse park:** must not spam exit-maneuver HUD (Chinese “导航：准备驶出匝道” / English `Navigation: Exit Maneuver`). `NavExitLaneChange` is forced off by the bridge, so this HUD is not expected to trigger even for a real highway exit. Limit/light snapshot stays after arrive.
 - **Lights:** red/yellow → aggressive decel toward stop; lead has priority; no fake green. Explicit remainS 0 or 1 + aligned clocks may release; omitted remainS keeps red stop.
 - **Sticky / change-driven:** identical packets do not refresh snapshot; long silence may warn but must **not** clear snapshot. Clearing leftover bits only when BT toggle is off.
 - **Cruise UI:** default max set **120 km/h**; wheel step **±10 km/h**.
@@ -26,6 +26,8 @@
 ## Known limits (accepted)
 
 - Amap Auto may report `LIMITED_SPEED` as `-1` / floor `30` in cities; do not fabricate substitutes; do not use camera speed as road limit.
+- **Light distance:** phone-side estimate from TBT distance only, valid at most **150 m**. A straight-through red light with no TBT maneuver is not IQ-link's responsibility.
+- **navExit HUD:** bridge forces `NavExitLaneChange` off; it currently does not trigger.
 - Lane B is a **gate only** (`straight` suppresses auto lane change) — no HUD / precise lane pick.
 - BLE: steady state should stay HMAC-connected; SoftBus flaps may keep advertising without demoting immediately. Cold start reconnect is typically seconds to tens of seconds.
 
@@ -50,7 +52,7 @@
 ## Progress signals (pick one per road trip)
 
 1. Raw limit on HUD + execution floor 60 (e.g. city 40 reported as 40, control ≥60 except light approach).
-2. TBT distance slowdown or stricter curve vs bare limit.
+2. Stricter curve slowdown vs bare road limit (IQ.Dynamic; no TBT distance cap).
 3. Red/yellow aggressive decel with recovery after green.
 
 ## Explicitly out of product
@@ -75,3 +77,5 @@
 3. 粘限速：同内容不清快照；关蓝牙开关才清遗留位。  
 4. 硬失败：该停未停 / Cruise Faulted / 占道仍变道。  
 5. 证据以 rlog + `iqNavState` 为准；细节以英文正文为准。
+6. 灯距仅由手机端 TBT 距离猜测，最多 150 m；无 TBT 机动的直行红灯不属于 IQ-link 负责范围。
+7. bridge 强制关闭 `NavExitLaneChange`，所以 `navExit` HUD 当前不会触发。

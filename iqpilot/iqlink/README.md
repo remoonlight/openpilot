@@ -10,15 +10,17 @@ You need a compatible comma device, the correct harness, Wi-Fi, and a phone with
 
 ### Installation
 1. Restore stock openpilot at [flash.comma.ai](https://flash.comma.ai).
-2. Finish stock setup, connect Wi-Fi, and enter `https://installer.iqlvbs.com/release-candidate-4` as the custom software URL.
+2. Finish stock setup, connect Wi-Fi, and enter `https://installer.iqlvbs.com/release-candidate-4` as the custom software URL to install the required `beta` device base.
 3. Wait for download and reboot. The home screen date and time should look normal.
 4. If the ~1 GB download fails, retry Wi-Fi once, then use the [Gigafile package](https://105.gigafile.nu/1022-i1e58aa3443a357555c7f25a9f6a0e737) (`IQ.OS-4.9.7.zip`, SHA256 `4c068f424ebf1ed761c305a259eb47e9a1355b394a9b77106e6c17d6e9a68612`). Ask in Discord before manual flashing.
-5. With `release-candidate-4` running, enable ADB or SSH in Developer settings only when Cursor will deploy the overlay.
+5. With the `beta` device base running, enable ADB or SSH in Developer settings only when Cursor will deploy the overlay.
 6. From this repository root:
 
    `python iqpilot/iqlink/tools/deploy_iqlink_overlay.py iq@DEVICE_IP`
 
-   The tool requires Git root `/data/iqpilot` and branch `release-candidate-4`. It backs up touched files under `/data/iqlink-overlay-backup-*`.
+   The tool requires Git root `/data/iqpilot` and asserts that its checked-out branch is `beta`. It backs up touched files under `/data/iqlink-overlay-backup-*`.
+
+   Branch names serve different purposes: this source repository is maintained on `iq-link`; the public settings snapshot records that device's `GitBranch` as `iqlink`; deployment is allowed only to the `beta` base asserted by the script. The snapshot is evidence, not a deploy target.
 7. Apply only needed keys from [`comma_settings_public.json`](./comma_settings_public.json), reboot if needed, then pair IQ-link from the **Bluetooth** tile.
 
 ### Pair your phone
@@ -37,6 +39,8 @@ You need a compatible comma device, the correct harness, Wi-Fi, and a phone with
 ### Settings and overlay tool
 Problem-specific keys (smooth steer, long increment, map speed-limit off): [`SETTINGS.md`](./SETTINGS.md).
 [`comma_settings_public.json`](./comma_settings_public.json) is the **recommended snapshot from this comma** (redacted VW ID.3 2024–25 / IQ-link), not a dump for every car. Same platform: apply the file after overlay. Other cars: copy only the keys you intend to change. Helpers: [`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py), [`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py). Reboot after writing.
+
+The JSON is the complete settings snapshot; it is intentionally not duplicated here. `IqlinkExclusive`, `NavigateOnIQPilot`, `Nav*`, `Osm*`, and `OfflineRouting*` are lazy/legacy keys in this snapshot: the overlay keeps `navd` and `mapd` off, so they do not enable a navigation session or route planning. Planning and process notes stay in the local `docs/` folder and are not uploaded to git.
 
 From the repository root:
 
@@ -61,15 +65,17 @@ IQ-link 用低功耗蓝牙把 comma 与手机上的 IQ-link 程序连起来。�
 
 ### 安装步骤
 1. 打开 [flash.comma.ai](https://flash.comma.ai)，恢复原厂 openpilot。
-2. 完成原厂设置、连上 Wi-Fi，在“自定义软件地址”填写 `https://installer.iqlvbs.com/release-candidate-4`。
+2. 完成原厂设置、连上 Wi-Fi，在“自定义软件地址”填写 `https://installer.iqlvbs.com/release-candidate-4`，安装所需的 `beta` 设备底座。
 3. 等待下载和重启完成，首页日期与时间应显示正常。
 4. 若约 1 GB 文件下载失败，先重试 Wi-Fi；仍失败可使用 [Gigafile 文件](https://105.gigafile.nu/1022-i1e58aa3443a357555c7f25a9f6a0e737)（`IQ.OS-4.9.7.zip`，SHA256 `4c068f424ebf1ed761c305a259eb47e9a1355b394a9b77106e6c17d6e9a68612`）。手动刷机前请先到 Discord 求助。
-5. 确认已是 `release-candidate-4` 后，仅在 Cursor 辅助部署时开启 ADB 或 SSH。
+5. 确认设备已运行 `beta` 底座后，仅在 Cursor 辅助部署时开启 ADB 或 SSH。
 6. 在本仓库根目录执行：
 
    `python iqpilot/iqlink/tools/deploy_iqlink_overlay.py iq@设备IP`
 
-   工具要求 Git 根目录为 `/data/iqpilot`、分支为 `release-candidate-4`，并会把改动文件备份到 `/data/iqlink-overlay-backup-*`。
+   工具要求 Git 根目录为 `/data/iqpilot`，并断言其检出分支为 `beta`；改动文件会备份到 `/data/iqlink-overlay-backup-*`。
+
+   三个分支名用途不同：本源码仓维护分支是 `iq-link`；公开设置快照里的设备 `GitBranch` 是 `iqlink`；部署脚本只允许断言为 `beta` 的设备底座。快照仅是采样证据，不是部署目标。
 7. 按需写入 [`comma_settings_public.json`](./comma_settings_public.json) 中的设置，必要时重启，再从 **蓝牙** 卡片配对 IQ-link。
 
 ### 连接手机
@@ -88,6 +94,8 @@ IQ-link 用低功耗蓝牙把 comma 与手机上的 IQ-link 程序连起来。�
 ### 设置与部署工具
 按问题对照的键（平滑转向、纵向步进、地图限速关闭）见 [`SETTINGS.md`](./SETTINGS.md)。
 [`comma_settings_public.json`](./comma_settings_public.json) 是这台 comma 上脱敏后的**建议配置**（大众 ID.3 2024–25 / IQ-link），不是所有车的通用备份。同平台 overlay 后建议整份套用；其他车只写入你要改的键。脚本：[`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py)、[`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py)。写完重启一次。
+
+完整设置只保留在 JSON，不在本页重复内嵌。快照中的 `IqlinkExclusive`、`NavigateOnIQPilot`、`Nav*`、`Osm*`、`OfflineRouting*` 是惰性/遗留键：overlay 关闭 `navd`、`mapd`，它们不会开启车上导航会话或路线规划。规划与过程文档只放本仓库本地 `docs/`，不上传 git。
 
 在本仓库根目录：
 
@@ -111,231 +119,8 @@ ssh iq@10.10.10.205 '/usr/local/venv/bin/python /tmp/export_comma_settings_publi
 
 ---
 
-## Settings / 配置 (JSON)
+## Settings / 配置
 
-```json
-{
-  "meta": {
-    "generated_cst": "2026-08-17 17:32:24",
-    "source": "comma /data/params/d",
-    "purpose": "GitHub-safe openpilot/IQ settings snapshot (account/device identity redacted)",
-    "settings_count": 188,
-    "excluded_count": 35,
-    "redaction": [
-      "DongleId / HardwareSerial / IMEI",
-      "GithubUsername / GithubSshKeys / GitRemote",
-      "WiFi / Hotspot SSID & passwords / BLE PSK",
-      "Mapbox / API tokens & caches",
-      "NavDestination / NavigationDestination / GPS / routes",
-      "CalibrationParams / CarParams* / VIN / fingerprints",
-      "GsmApn / cellular metering",
-      "Live IqlinkBle* link state",
-      "Uptime / route counts / update timestamps",
-      "Personal updater branches (cursor/cloud-agent*)"
-    ],
-    "note": "0/1 are kept as integers (device stores BOOL and INT enums the same way). Restore is manual: copy only the keys you intend to change.",
-    "docs": "iqpilot/iqlink/README.md"
-  },
-  "settings": {
-    "AdbEnabled": 1,
-    "AllowLateralWhenLongUnavailable": 1,
-    "AlphaLongitudinalEnabled": 1,
-    "AmbientTrackDots": 1,
-    "AolEnabled": 1,
-    "AolMainCruiseAllowed": 1,
-    "AolSteeringMode": 1,
-    "AolUnifiedEngagementMode": 1,
-    "AutoLaneChangeBsmDelay": 0,
-    "AutoLaneChangeTimer": 1,
-    "BlindSpot": 0,
-    "Brightness": 0,
-    "CameraOffset": 0.0,
-    "CarPlatformBundle": {
-      "platform": "VOLKSWAGEN_ID3_MK2",
-      "make": "Volkswagen",
-      "brand": "volkswagen",
-      "model": "ID.3",
-      "year": [
-        "2024",
-        "2025"
-      ],
-      "package": "Adaptive Cruise Control (ACC) & Lane Assist",
-      "name": "Volkswagen ID.3 2024-25"
-    },
-    "ChevronInfo": 0,
-    "IQLeadReadouts": 0,
-    "CompletedTrainingVersion": "0.2.0",
-    "ConstructionZoneAssist": 0,
-    "ConstructionZoneSpeed": 60,
-    "DashcamEnabled": 1,
-    "DeveloperUI": 0,
-    "DeviceBootMode": 0,
-    "DisableUpdates": 1,
-    "DisengageOnAccelerator": 0,
-    "EnableCurvatureController": 0,
-    "EnableEsimProvisioning": 1,
-    "EnableLongComfortMode": 0,
-    "EnableSLPredReactToCurves": 0,
-    "EnableSLPredReactToSL": 0,
-    "EnableSpeedLimitControl": 0,
-    "EnableSpeedLimitPredicative": 0,
-    "ExperimentalMode": 1,
-    "FlockCameraAlerts": 0,
-    "ForceRHDForBSM": 0,
-    "ForceSmallUI": 0,
-    "GitBranch": "iqlink",
-    "GitCommit": "879df50256e69e112c2aa91ca30387a97546609e",
-    "GitCommitDate": "'1785935590 2026-08-05 21:13:10 +0800'",
-    "GreenLightAlert": 0,
-    "HasAcceptedTerms": 2,
-    "HomePanelWidget": "changelog",
-    "HyundaiLongitudinalTuning": 0,
-    "IQAlertSilence": 0,
-    "IQBlinkerMinLateralSpeed": 20,
-    "IQBlinkerPauseLateral": 0,
-    "IQCustomStopDistance": 0,
-    "IQDevUIInfo": 0,
-    "IQDynamicBlendStockRadar": 0,
-    "IQDynamicConditionalCurves": 1,
-    "IQDynamicConditionalLeadSpeed": 24.0,
-    "IQDynamicConditionalModelStops": 1,
-    "IQDynamicConditionalSLCFallback": 1,
-    "IQDynamicConditionalSlowerLead": 1,
-    "IQDynamicConditionalSpeed": 18.0,
-    "IQDynamicConditionalStoppedLead": 1,
-    "IQDynamicMinimumForceStopLength": 0.0,
-    "IQDynamicMode": 0,
-    "IQDynamicModelStopTime": 2.5,
-    "IQE2ESetSpeedMode": 0,
-    "IQE2ESetSpeedMph": 65,
-    "IQE2ESetSpeedUseCurrent": 0,
-    "IQExpandedStatus": 0,
-    "IQForceStops": 1,
-    "IQLaneTurnDesire": 1,
-    "IQLaneTurnValue": 19.0,
-    "IQSpeedAssistMode": 0,
-    "IQSpeedAssistOffsetType": 0,
-    "IQSpeedAssistPolicy": 3,
-    "IQSpeedAssistValueOffset": 0,
-    "InteractivityTimeout": 0,
-    "IqlinkAggressiveLaneChange": 1,
-    "IqlinkCancelTimeoutS": 5,
-    "IqlinkEnabled": 1,
-    "IqlinkExclusive": 1,
-    "IqlinkLinkWarn": 0,
-    "IqlinkProductCruiseDefaultsV1": 1,
-    "IqlinkWarnTimeoutS": 3,
-    "IsDevelopmentBranch": 0,
-    "IsMetric": 1,
-    "IsReleaseBranch": 0,
-    "IsReleaseIqBranch": 0,
-    "IsRhdDetected": 0,
-    "IsTestedBranch": 0,
-    "Konn3ktAllowOffroadExternalCanTx": 0,
-    "Konn3ktBleTransportEnabled": 1,
-    "Konn3ktLibdatachannelWebRTC": 0,
-    "LagdToggle": 1,
-    "LagdToggleDelay": 0.2,
-    "LagdValueCache": 0.5,
-    "LaneChangeBsd": 0,
-    "LaneChangeContinuous": 1,
-    "LaneChangeDelay": 0.0,
-    "LaneChangeNeedTorque": 0,
-    "LanguageSetting": "zh-CHS",
-    "LatSmoothSec": 13,
-    "LeadDepartAlert": 0,
-    "LongIncrementHoldStep": 5,
-    "LongIncrementTapStep": 10,
-    "LongIncrementsEnabled": 1,
-    "LongitudinalPersonality": 0,
-    "MapCurveSpeedController": 0,
-    "MapSpeedLookaheadHigher": 5.0,
-    "MapSpeedLookaheadLower": 5.0,
-    "MaxTimeOffroad": 1800,
-    "ModelLatSmoothSec": 0,
-    "ModelSmoothingEnabled": 0,
-    "NavExitLaneChange": 1,
-    "NavOfflineFallback": 1,
-    "NavOnlineTargets": 1,
-    "NavPreferOfflineSources": 0,
-    "NavigateOnIQPilot": 1,
-    "NavigationEnabled": 0,
-    "NavigationRecalculateRoutes": 0,
-    "NetworkMetered": 0,
-    "NeuralNetworkFeedForward": 0,
-    "NightMode": 0,
-    "OBrightness": 0,
-    "OBrightnessDelay": 0,
-    "OBrightnessManual": 0,
-    "OSMapsHeadingUp": 1,
-    "OSMapsStyleMode": 0,
-    "OfflineOSMaps": 0,
-    "OfflineRoutingEnabled": 1,
-    "OfflineRoutingHost": "http://127.0.0.1:8002",
-    "OfflineRoutingOnly": 0,
-    "OnScreenNavigation": 0,
-    "OnlineOSMaps": 1,
-    "OnroadScreenOffBrightness": 0,
-    "OnroadScreenOffTimer": 15,
-    "OnroadUploads": 1,
-    "OpenpilotEnabledToggle": 1,
-    "OsmStateName": "All",
-    "PlanplusControl": 1.0,
-    "RainbowMode": 0,
-    "RecordAudioFeedback": 0,
-    "RecordFront": 0,
-    "RedLightCameraAlerts": 0,
-    "RoadNameToggle": 0,
-    "RocketFuel": 0,
-    "SLCAutoConfirm": 0,
-    "SLCDataCollection": 0,
-    "SLCFallbackExperimentalMode": 1,
-    "SLCFallbackPreviousSpeedLimit": 1,
-    "SLCFallbackSetSpeed": 0,
-    "SLCOnlineFiller": 0,
-    "SLCOverrideMethod": 0,
-    "SLCPolicy": 2,
-    "SLCSetSpeedToLimit": 0,
-    "ScreenRecording": 0,
-    "ShowBSMIndicators": 0,
-    "ShowRealTimeAcceleration": 0,
-    "ShowRoadName": 0,
-    "ShowSpeedLimits": 0,
-    "ShowSteeringArc": 0,
-    "ShowTurnSignals": 0,
-    "SpeedCameraAlerts": 0,
-    "SpeedCameraSafetyFactor": 1.0,
-    "SpeedCameraSlowdown": 0,
-    "SpeedLimitConfirmationHigher": 1,
-    "SpeedLimitConfirmationLower": 0,
-    "SpeedLimitController": 0,
-    "SshEnabled": 1,
-    "StandstillTimer": 0,
-    "SubaruStopAndGo": 0,
-    "SubaruStopAndGoManualParkingBrake": 0,
-    "TeslaCoopSteering": 0,
-    "TorqueBar": 1,
-    "ToyotaEnforceStockLongitudinal": 0,
-    "ToyotaSnGHack": 0,
-    "UIAccentColor": "#00FFF5",
-    "UbloxAvailable": 1,
-    "UpdaterAvailableBranches": "iqlink,release-meb",
-    "UpdaterInstallMode": "download_and_install",
-    "UsbStorageEnabled": 1,
-    "Version": "IQ.Pilot 1.0c",
-    "VisionCurveSpeedController": 0,
-    "VisionVehicleTracks": 0,
-    "eBrakeActive": 0,
-    "iqMqbAccResume": 0,
-    "iqMqbSteeringLockout": 0,
-    "newLeadMpc": 1,
-    "speed_limit_offset1": 0.0,
-    "speed_limit_offset2": 0.0,
-    "speed_limit_offset3": 0.0,
-    "speed_limit_offset4": 0.0,
-    "speed_limit_offset5": 0.0,
-    "speed_limit_offset6": 0.0,
-    "speed_limit_offset7": 0.0
-  }
-}
-```
+See the complete, redacted snapshot: [comma_settings_public.json](./comma_settings_public.json).
+
+完整脱敏快照见：[comma_settings_public.json](./comma_settings_public.json)。

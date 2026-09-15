@@ -15,7 +15,7 @@
       "CalibrationParams / CarParams* / VIN / fingerprints",
       "Personal updater branches (cursor/cloud-agent*)"
     ],
-    "note": "0/1 are kept as integers (device stores BOOL and INT enums the same way). Restore is manual: copy only the keys you intend to change."
+    "note": "0/1 are kept as integers (device stores BOOL and INT enums the same way). Restore is manual: copy only the keys you intend to change. IqlinkExclusive, NavigateOnIQPilot, Nav*, Osm*, and OfflineRouting* are lazy/legacy snapshot keys: this overlay keeps navd and mapd off, so they do not enable a device navigation session or route planning."
   },
   "settings": {
     "AdbEnabled": 0,
