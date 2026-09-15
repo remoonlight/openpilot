@@ -88,10 +88,26 @@ def test_nav_exec_floor():
   assert max(highway, 0.0, floor) == highway
 
 
+def test_overlay_stock_maps_hard_off():
+  src = (ROOT / "system/manager/process_config.py").read_text(encoding="utf-8")
+  keys = src.split("def ")
+  for name in ("navd_onroad", "navrenderd_onroad", "iqmapd_needed", "iqmapd_onroad", "mapd_onroad"):
+    body = next(chunk for chunk in keys if chunk.startswith(name + "("))
+    assert "return False" in body, name
+    assert "return started" not in body, name
+  helpers = (ROOT / "system/manager/helpers.py").read_text(encoding="utf-8")
+  assert "def pin_iqlink_stock_maps_off" in helpers
+  manager = (ROOT / "system/manager/manager.py").read_text(encoding="utf-8")
+  assert "pin_iqlink_stock_maps_off(params)" in manager
+  keys_h = (ROOT / "common/params_keys.h").read_text(encoding="utf-8")
+  assert '{"OfflineRoutingEnabled", {PERSISTENT, BOOL, "0"}}' in keys_h
+
+
 if __name__ == "__main__":
   test_min_display_speed_limit()
   test_meb_tsk_hard_brake_overlay()
   test_settings_includes_iqlink_bluetooth_tile()
   test_cruise_hides_map_speed_limit_menu()
   test_nav_exec_floor()
+  test_overlay_stock_maps_hard_off()
   print("ok")

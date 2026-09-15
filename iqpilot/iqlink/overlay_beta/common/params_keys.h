@@ -394,7 +394,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"NavOnlineTargets", {PERSISTENT, BOOL, "1"}},
     {"NavOfflineFallback", {PERSISTENT, BOOL, "1"}},
     {"NavPreferOfflineSources", {PERSISTENT, BOOL, "0"}},
-    {"OfflineRoutingEnabled", {PERSISTENT, BOOL, "1"}},
+    {"OfflineRoutingEnabled", {PERSISTENT, BOOL, "0"}},
     {"OfflineRoutingOnly", {PERSISTENT, BOOL, "0"}},
     {"OfflineRoutingHost", {PERSISTENT, STRING, "http://127.0.0.1:8002"}},
     {"EnableCurvatureController", {PERSISTENT, BOOL, "0"}},

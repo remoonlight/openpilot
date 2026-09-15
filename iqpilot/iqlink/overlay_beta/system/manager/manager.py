@@ -19,7 +19,7 @@ from iqpilot.system.hardware import HARDWARE
 from iqpilot.system.loggerd.crash_recovery import recover_unclean_segments
 from iqpilot.system.manager.helpers import (
   unblock_stdout, write_onroad_params, save_bootlog, heal_param_perms,
-  apply_iqlink_product_cruise_defaults, heal_active_model_bundle,
+  apply_iqlink_product_cruise_defaults, pin_iqlink_stock_maps_off, heal_active_model_bundle,
 )
 from iqpilot.system.manager.process import ensure_running
 from iqpilot.system.manager.process_config import managed_processes
@@ -95,6 +95,7 @@ def manager_init() -> None:
       params.put(k, value)
 
   apply_iqlink_product_cruise_defaults(params)
+  pin_iqlink_stock_maps_off(params)
 
   # Create folders needed for msgq
   try:

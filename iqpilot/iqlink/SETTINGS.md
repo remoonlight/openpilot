@@ -36,6 +36,18 @@ Road limit comes from IQ-link BLE + APK. Map/SLC must stay off so it does not fi
 
 The Cruise menu no longer exposes Speed Limit / speed limit settings.
 
+### Stock offline maps (permanently off)
+
+Do not enable OSM `mapd`, offline routing, or offline on-screen tiles. Overlay pins these off at boot and never starts `mapd` / `iqmapd` / `navd`.
+
+| Key | Value | Meaning |
+|---|---|---|
+| `OfflineOSMaps` | `0` | no stored on-screen map tiles |
+| `OfflineRoutingEnabled` | `0` | no local OSM routing engine |
+| `OfflineRoutingOnly` | `0` | unused |
+
+`OnlineOSMaps` may still draw live Mapbox chrome; it is not routing.
+
 ### IQ-link timeout behavior
 
 | Key | Meaning |
@@ -80,6 +92,18 @@ The Cruise menu no longer exposes Speed Limit / speed limit settings.
 | `ShowSpeedLimits` | `0` | 不显示地图限速 HUD |
 
 Cruise 菜单不再出现 Speed Limit / speed limit settings。
+
+### 自带离线地图（永久关）
+
+不要打开 OSM `mapd`、离线路由或离线底图。overlay 开机强制关掉，并且不启动 `mapd` / `iqmapd` / `navd`。
+
+| 键 | 值 | 含义 |
+|---|---|---|
+| `OfflineOSMaps` | `0` | 不下载离线底图 |
+| `OfflineRoutingEnabled` | `0` | 不用本地 OSM 路由 |
+| `OfflineRoutingOnly` | `0` | 闲置 |
+
+`OnlineOSMaps` 仍可画在线 Mapbox 底图，那不是控车路由。
 
 ### IQ-link 超时行为
 

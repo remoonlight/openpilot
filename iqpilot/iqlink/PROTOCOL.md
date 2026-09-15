@@ -42,6 +42,8 @@ Notes:
 
 Deprecated (do not use as fallback): UDP 7705 / 7706, TCP 7713.
 
+**Stock offline maps are out of product permanently.** Overlay never starts `mapd` / `iqmapd` / `navd` / `navrenderd`. Do not turn on `OfflineOSMaps` or `OfflineRoutingEnabled`. On-screen online tiles (`OnlineOSMaps`) are unrelated HUD chrome, not routing.
+
 ## Longitudinal behavior (summary)
 
 - **Change-driven:** identical `data` payloads do not refresh the execution snapshot (link heartbeat may still update).
@@ -110,7 +112,7 @@ canonical_json = json.dumps(data, ensure_ascii=True, sort_keys=True, separators=
 ## 中文摘要
 
 - **产品**：车上无导航会话；IQ-link只推即时参数；停导不清参；已连 = 设备 `LinkState=2`。
-- **传输**：仅 BLE GATT；7705/7706/7713 已废弃。
+- **传输**：仅 BLE GATT；7705/7706/7713 已废弃。comma 自带离线地图 / OSM `mapd` / 离线路由永久不做，不要再打开。
 - **纵向**：变更驱动 + 粘限速；限速原值上报、执行侧常保底 60；`IQSpeedAssistValueOffset` 当前无 UI、事实为 0；红黄猛减速；remainS 0/1 且时钟对齐可放行；省略 remainS 保持红停；无绿波/SDI；车道 B 仅直行门控；无 TBT 压速。
 - **TBT**：lc* → fork，真出口 → exit；到站 150m 内只停横向 desire，HUD 出口提示另做档位/剩余距离门控。
 - **Cereal（beta）**：高德红绿灯字段为 `IQNavState @62/@63`；不要按 release 树历史的 `@49/@50` 映射。

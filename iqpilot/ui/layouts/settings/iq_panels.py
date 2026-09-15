@@ -395,8 +395,7 @@ class IQMapsLayout(Widget):
     self._state_btn = IQListItem(tr("State"), action_item=WideButtonAction(tr("SELECT"), enabled=True),
                                  callback=lambda: self._open_region_picker("State"))
 
-    self.items = [self._mapd_version, self._online_maps_toggle, self._offline_maps_toggle, self._delete_maps_btn,
-                  self._progress, self._tile_progress, self._update_btn, self._country_btn, self._state_btn]
+    self.items = [self._online_maps_toggle]
 
   def _refresh_disk_usage(self):
     def worker():

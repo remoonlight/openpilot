@@ -60,6 +60,7 @@
 - Car “cancel navigation” / “nav exclusive”
 - Treating “stop pushing” as “cancel one navigation”
 - Green-wave / SDI camera slowing
+- Stock comma offline maps (OSM `mapd` / offline routing / offline on-screen tiles)
 - Accessibility / phone minimap as primary source
 - Smart lane pick / lane-change HUD beyond straight gate
 
@@ -73,7 +74,7 @@
 ## 中文清单
 
 1. 车上无导航会话；已连 = 设备绿灯 `LinkState=2`。  
-2. 限速原值上报、控车常 ≥60；红黄应猛减速；无绿波/SDI。  
+2. 限速原值上报、控车常 ≥60；红黄应猛减速；无绿波/SDI；comma 自带离线地图不做。  
 3. 粘限速：同内容不清快照；关蓝牙开关才清遗留位。  
 4. 硬失败：该停未停 / Cruise Faulted / 占道仍变道。  
 5. 证据以 rlog + `iqNavState` 为准；细节以英文正文为准。

@@ -15,7 +15,7 @@
       "CalibrationParams / CarParams* / VIN / fingerprints",
       "Personal updater branches (cursor/cloud-agent*)"
     ],
-    "note": "0/1 are kept as integers (device stores BOOL and INT enums the same way). Restore is manual: copy only the keys you intend to change. IqlinkExclusive, NavigateOnIQPilot, Nav*, Osm*, and OfflineRouting* are lazy/legacy snapshot keys: this overlay keeps navd and mapd off, so they do not enable a device navigation session or route planning."
+    "note": "0/1 are kept as integers (device stores BOOL and INT enums the same way). Restore is manual: copy only the keys you intend to change. IqlinkExclusive, NavigateOnIQPilot, Nav*, Osm*, OfflineOSMaps, and OfflineRouting* are lazy/legacy snapshot keys: this overlay keeps navd and mapd off and pins offline maps off at boot, so they do not enable a device navigation session, OSM routing, or offline tiles."
   },
   "settings": {
     "AdbEnabled": 0,
@@ -219,7 +219,7 @@
     "OSMapsHeadingUp": 1,
     "OSMapsStyleMode": 0,
     "OfflineOSMaps": 0,
-    "OfflineRoutingEnabled": 1,
+    "OfflineRoutingEnabled": 0,
     "OfflineRoutingHost": "http://127.0.0.1:8002",
     "OfflineRoutingOnly": 0,
     "OnScreenNavigation": 0,

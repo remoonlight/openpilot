@@ -40,7 +40,7 @@ You need a compatible comma device, the correct harness, Wi-Fi, and a phone with
 Problem-specific keys (smooth steer, long increment, map speed-limit off): [`SETTINGS.md`](./SETTINGS.md).
 [`comma_settings_public.json`](./comma_settings_public.json) is the **recommended snapshot from this comma** (redacted VW ID.3 2024–25 / IQ-link), not a dump for every car. Same platform: apply the file after overlay. Other cars: copy only the keys you intend to change. Helpers: [`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py), [`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py). Reboot after writing.
 
-The JSON is the complete settings snapshot; it is intentionally not duplicated here. `IqlinkExclusive`, `NavigateOnIQPilot`, `Nav*`, `Osm*`, and `OfflineRouting*` are lazy/legacy keys in this snapshot: the overlay keeps `navd` and `mapd` off, so they do not enable a navigation session or route planning. Planning and process notes stay in the local `docs/` folder and are not uploaded to git.
+The JSON is the complete settings snapshot; it is intentionally not duplicated here. `IqlinkExclusive`, `NavigateOnIQPilot`, `Nav*`, `Osm*`, `OfflineOSMaps`, and `OfflineRouting*` are lazy/legacy keys: the overlay keeps `navd` and `mapd` off and pins offline maps off at boot, so they do not enable a navigation session, OSM routing, or offline tiles. Planning and process notes stay in the local `docs/` folder and are not uploaded to git.
 
 From the repository root:
 
@@ -95,7 +95,7 @@ IQ-link 用低功耗蓝牙把 comma 与手机上的 IQ-link 程序连起来。�
 按问题对照的键（平滑转向、纵向步进、地图限速关闭）见 [`SETTINGS.md`](./SETTINGS.md)。
 [`comma_settings_public.json`](./comma_settings_public.json) 是这台 comma 上脱敏后的**建议配置**（大众 ID.3 2024–25 / IQ-link），不是所有车的通用备份。同平台 overlay 后建议整份套用；其他车只写入你要改的键。脚本：[`tools/apply_comma_settings_public.py`](./tools/apply_comma_settings_public.py)、[`tools/export_comma_settings_public.py`](./tools/export_comma_settings_public.py)。写完重启一次。
 
-完整设置只保留在 JSON，不在本页重复内嵌。快照中的 `IqlinkExclusive`、`NavigateOnIQPilot`、`Nav*`、`Osm*`、`OfflineRouting*` 是惰性/遗留键：overlay 关闭 `navd`、`mapd`，它们不会开启车上导航会话或路线规划。规划与过程文档只放本仓库本地 `docs/`，不上传 git。
+完整设置只保留在 JSON，不在本页重复内嵌。快照中的 `IqlinkExclusive`、`NavigateOnIQPilot`、`Nav*`、`Osm*`、`OfflineOSMaps`、`OfflineRouting*` 是惰性/遗留键：overlay 关闭 `navd`、`mapd`，开机强制关掉离线地图，它们不会开启车上导航会话、OSM 路由或离线底图。规划与过程文档只放本仓库本地 `docs/`，不上传 git。
 
 在本仓库根目录：
 

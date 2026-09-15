@@ -74,12 +74,12 @@ def iqlink_needed(started: bool, params: Params, CP: car.CarParams) -> bool:
   return params.get_bool("IqlinkEnabled")
 
 def navd_onroad(started: bool, params: Params, CP: car.CarParams) -> bool:
-  # iqlink: BLE owns live nav params; stock Mapbox/OSM stack stays off.
+  # Permanently off: IQ-link does not use stock Mapbox/OSM navd. Do not re-enable.
   return False
 
 
 def navrenderd_onroad(started: bool, params: Params, CP: car.CarParams) -> bool:
-  # iqlink: BLE owns live nav params; stock Mapbox/OSM stack stays off.
+  # Permanently off: IQ-link does not use stock Mapbox/OSM navrenderd. Do not re-enable.
   return False
 
 
@@ -93,12 +93,12 @@ def iqmapd_needed(params: Params) -> bool:
 
 
 def iqmapd_onroad(started: bool, params: Params, CP: car.CarParams) -> bool:
-  # iqlink: BLE owns live nav params; stock Mapbox/OSM stack stays off.
+  # Permanently off: stock iqmapd / OSM offline maps are not a product. Do not re-enable.
   return False
 
 
 def mapd_onroad(started: bool, params: Params, CP: car.CarParams) -> bool:
-  # iqlink: BLE owns live nav params; stock Mapbox/OSM stack stays off.
+  # Permanently off: stock mapd (OSM speed/curve DB) is not a product. Do not re-enable.
   return False
 
 

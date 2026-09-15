@@ -41,6 +41,26 @@ def test_apply_iqlink_product_cruise_defaults_once():
   assert p.vals["LongIncrementTapStep"] == 5  # not overwritten
 
 
+def test_pin_iqlink_stock_maps_off_always():
+  def pin(p):
+    p.put_bool("OfflineOSMaps", False)
+    p.put_bool("OfflineRoutingEnabled", False)
+    p.put_bool("OfflineRoutingOnly", False)
+
+  p = _FakeParams({
+    "OfflineOSMaps": True,
+    "OfflineRoutingEnabled": True,
+    "OfflineRoutingOnly": True,
+  })
+  pin(p)
+  assert p.vals["OfflineOSMaps"] is False
+  assert p.vals["OfflineRoutingEnabled"] is False
+  assert p.vals["OfflineRoutingOnly"] is False
+  pin(p)
+  assert p.vals["OfflineRoutingEnabled"] is False
+
+
 if __name__ == "__main__":
   test_apply_iqlink_product_cruise_defaults_once()
+  test_pin_iqlink_stock_maps_off_always()
   print("ok")

@@ -27,6 +27,17 @@ def apply_iqlink_product_cruise_defaults(params: Params | None = None) -> None:
     cloudlog.exception("iqlink product cruise defaults migration failed")
 
 
+def pin_iqlink_stock_maps_off(params: Params | None = None) -> None:
+  # Product: stock OSM / offline routing / offline on-screen tiles stay off forever.
+  p = params if params is not None else Params()
+  try:
+    p.put_bool("OfflineOSMaps", False)
+    p.put_bool("OfflineRoutingEnabled", False)
+    p.put_bool("OfflineRoutingOnly", False)
+  except Exception:
+    cloudlog.exception("iqlink stock maps pin failed")
+
+
 def unblock_stdout() -> None:
   # get a non-blocking stdout
   child_pid, child_pty = os.forkpty()
