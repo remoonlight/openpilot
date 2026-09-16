@@ -69,6 +69,11 @@ def test_settings_includes_iqlink_bluetooth_tile():
   src = (ROOT / "selfdrive/ui/mici/layouts/settings/settings.py").read_text(encoding="utf-8")
   assert "from iqpilot.selfdrive.ui.mici.layouts.settings.iqlink import IqlinkBigButton" in src
   assert "IqlinkBigButton()" in src
+  main = Path(__file__).resolve().parents[2] / "selfdrive/ui/mici/layouts/settings/settings.py"
+  main_src = main.read_text(encoding="utf-8")
+  assert "from iqpilot.selfdrive.ui.mici.layouts.settings.iqlink import IqlinkBigButton" in main_src
+  assert "IqlinkBigButton()" in main_src
+  assert (Path(__file__).resolve().parents[2] / "selfdrive/ui/mici/layouts/settings/iqlink.py").is_file()
 
 
 def test_cruise_hides_map_speed_limit_menu():

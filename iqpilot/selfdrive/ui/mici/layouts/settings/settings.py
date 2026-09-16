@@ -18,6 +18,7 @@ from iqpilot.selfdrive.ui.mici.layouts.settings.network.network_layout import Ne
 from iqpilot.selfdrive.ui.mici.layouts.settings.device import DeviceLayoutMici, PairBigButton
 from iqpilot.selfdrive.ui.mici.layouts.settings.developer import DeveloperLayoutMici
 from iqpilot.selfdrive.ui.mici.layouts.settings.software import SoftwareLayoutMici
+from iqpilot.selfdrive.ui.mici.layouts.settings.iqlink import IqlinkBigButton
 from iqpilot.system.ui.lib.application import gui_app, FontWeight
 from iqpilot.system.ui.lib.multilang import tr
 
@@ -114,6 +115,7 @@ class SettingsLayout(NavScroller):
     self._scroller.add_widgets([
       device_btn,
       network_btn,
+      IqlinkBigButton(),
       PairBigButton(),
       models_btn,
       software_btn,
