@@ -65,6 +65,13 @@ def test_meb_tsk_hard_brake_overlay():
   assert was_enabled is True
 
 
+def test_overlay_mici_home_draws_egpu_icon():
+  src = (ROOT / "selfdrive/ui/mici/layouts/home.py").read_text(encoding="utf-8")
+  assert "egpuDockPresent" in src
+  assert 'gui_app.texture("icons_mici/egpu.png"' in src
+  assert "def _update_dock_status" in src
+
+
 def test_settings_includes_iqlink_bluetooth_tile():
   src = (ROOT / "selfdrive/ui/mici/layouts/settings/settings.py").read_text(encoding="utf-8")
   assert "from iqpilot.selfdrive.ui.mici.layouts.settings.iqlink import IqlinkBigButton" in src
@@ -112,6 +119,7 @@ if __name__ == "__main__":
   test_min_display_speed_limit()
   test_meb_tsk_hard_brake_overlay()
   test_settings_includes_iqlink_bluetooth_tile()
+  test_overlay_mici_home_draws_egpu_icon()
   test_cruise_hides_map_speed_limit_menu()
   test_nav_exec_floor()
   test_overlay_stock_maps_hard_off()
