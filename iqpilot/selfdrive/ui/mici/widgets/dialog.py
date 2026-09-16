@@ -260,6 +260,10 @@ class BigInputDialog(BigDialogBase):
       self._confirm_callback()
 
 
+def _latin_only(s: str) -> bool:
+  return all(ord(c) < 0x250 for c in s)
+
+
 class BigDialogOptionButton(Widget):
   HEIGHT = 64
   SELECTED_HEIGHT = 74
@@ -271,8 +275,16 @@ class BigDialogOptionButton(Widget):
 
     self._selected = False
 
+    self._cjk_option = not _latin_only(option)
+    self._option_weight = FontWeight.DISPLAY_REGULAR
+    if self._cjk_option:
+      try:
+        gui_app.font(FontWeight.CJK)
+        self._option_weight = FontWeight.CJK
+      except KeyError:
+        self._option_weight = FontWeight.UNIFONT
     self._label = UnifiedLabel(option, font_size=70, text_color=rl.Color(255, 255, 255, int(255 * 0.58)),
-                               font_weight=FontWeight.DISPLAY_REGULAR, alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_MIDDLE,
+                               font_weight=self._option_weight, alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_MIDDLE,
                                scroll=True)
 
   def show_event(self):
@@ -291,11 +303,11 @@ class BigDialogOptionButton(Widget):
     if self._selected:
       self._label.set_font_size(self.SELECTED_HEIGHT)
       self._label.set_color(rl.Color(255, 255, 255, int(255 * 0.9)))
-      self._label.set_font_weight(FontWeight.DISPLAY)
+      self._label.set_font_weight(self._option_weight if self._cjk_option else FontWeight.DISPLAY)
     else:
       self._label.set_font_size(self.HEIGHT)
       self._label.set_color(rl.Color(255, 255, 255, int(255 * 0.58)))
-      self._label.set_font_weight(FontWeight.DISPLAY_REGULAR)
+      self._label.set_font_weight(self._option_weight)
 
     self._label.render(self._rect)
 

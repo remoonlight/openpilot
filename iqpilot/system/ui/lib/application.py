@@ -23,7 +23,6 @@ from typing import NamedTuple
 from importlib.resources import as_file, files
 from iqpilot.common.swaglog import cloudlog
 from iqpilot.system.hardware import EGL_DMA_BUF_SUPPORTED, HARDWARE, PC
-from iqpilot.system.ui.lib.multilang import multilang
 from iqpilot.common.realtime import Ratekeeper
 
 from iqpilot.system.ui.iqwidgets.lib.application import IQAppHooks
@@ -120,6 +119,7 @@ class FontWeight(StrEnum):
   BOLD = "Inter-Bold.fnt"
   SEMI_BOLD = "Inter-SemiBold.fnt"
   UNIFONT = "unifont.fnt"
+  CJK = "NotoSansSC-Regular.fnt"
   AUDIOWIDE = "Audiowide-Regular.fnt"
   SYNCOPATE = "Syncopate-Regular.fnt"
 
@@ -136,6 +136,7 @@ FONT_SOURCE_FILES = {
   FontWeight.BOLD: "Inter-Bold.ttf",
   FontWeight.SEMI_BOLD: "Inter-SemiBold.ttf",
   FontWeight.UNIFONT: "unifont.otf",
+  FontWeight.CJK: "NotoSansSC-Regular.ttf",
   FontWeight.AUDIOWIDE: "Audiowide-Regular.ttf",
   FontWeight.SYNCOPATE: "Syncopate-Regular.ttf",
   FontWeight.DISPLAY_REGULAR: "Inter-Regular.ttf",
@@ -144,11 +145,34 @@ FONT_SOURCE_FILES = {
 }
 
 
-def font_fallback(font: rl.Font) -> rl.Font:
-  """Fall back to unifont for languages that require it."""
-  if multilang.requires_unifont():
-    return gui_app.font(FontWeight.UNIFONT)
-  return font
+def _latin_only(text: str) -> bool:
+  return all(ord(c) < 0x250 for c in text)
+
+
+def _font_covers(font: rl.Font, text: str) -> bool:
+  count = int(font.glyphCount)
+  if count <= 0 or not text:
+    return False
+  glyphs = font.glyphs
+  for ch in text:
+    cp = ord(ch)
+    if cp < 32:
+      continue
+    idx = int(rl.get_glyph_index(font, cp))
+    if idx < 0 or idx >= count or int(glyphs[idx].value) != cp:
+      return False
+  return True
+
+
+def font_fallback(font: rl.Font, text: str = "") -> rl.Font:
+  """Keep Inter/Audiowide/etc for Latin. Only swap CJK strings onto NotoSans/unifont."""
+  if not text or _latin_only(text):
+    return font
+  cjk = gui_app._fonts.get(FontWeight.CJK)
+  uni = gui_app._fonts.get(FontWeight.UNIFONT, font)
+  if cjk is not None and _font_covers(cjk, text):
+    return cjk
+  return uni
 
 
 @dataclass
@@ -923,11 +947,13 @@ class GuiApplication(IQAppHooks):
     with as_file(FONT_DIR) as fspath:
       for font_weight_file in FontWeight:
         fnt_path = fspath / font_weight_file
+        source_path = fspath / FONT_SOURCE_FILES[font_weight_file]
+        if not fnt_path.is_file() and not source_path.is_file():
+          continue
         if fnt_path.is_file():
           font = rl.load_font(fnt_path.as_posix())
         else:
           source_name = FONT_SOURCE_FILES[font_weight_file]
-          source_path = fspath / source_name
           cloudlog.warning(f"font atlas missing for {font_weight_file}, loading source font {source_name}")
           font = rl.load_font_ex(source_path.as_posix(), 120, None, 0)
         if font_weight_file != FontWeight.UNIFONT:
@@ -949,7 +975,7 @@ class GuiApplication(IQAppHooks):
       rl._orig_draw_text_ex = rl.draw_text_ex
 
     def _draw_text_ex_scaled(font, text, position, font_size, spacing, tint):
-      font = font_fallback(font)
+      font = font_fallback(font, text if isinstance(text, str) else "")
       return rl._orig_draw_text_ex(font, text, position, font_size * FONT_SCALE, spacing, tint)
 
     rl.draw_text_ex = _draw_text_ex_scaled
