@@ -155,7 +155,7 @@ class VehicleLayoutMici(NavScroller):
       return name[:1].upper() + name[1:]
     if ui_state.CP and ui_state.CP.carFingerprint not in ("", "MOCK"):
       return self._pretty_name(ui_state.CP.carFingerprint)
-    return "tap to select"
+    return tr("tap to select")
 
   def _on_vehicle_clicked(self):
     if ui_state.params.get("CarPlatformBundle"):

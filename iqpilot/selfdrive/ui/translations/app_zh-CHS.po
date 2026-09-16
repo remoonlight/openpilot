@@ -88,7 +88,7 @@ msgstr "累计"
 #: openpilot/selfdrive/ui/mici/layouts/settings/steering.py:101
 #, python-brace-format
 msgid "AOL"
-msgstr "AOL"
+msgstr "始终横向"
 
 #: system/ui/widgets/network.py:191
 #, python-brace-format
@@ -1195,48 +1195,48 @@ msgstr "此车辆无法使用 IQ 纵向模式。原厂 ACC 是唯一可用选项
 #: openpilot/selfdrive/ui/widgets/exp_mode_button.py:65
 #, python-brace-format
 msgid "IQ.DYNAMIC"
-msgstr "IQ.DYNAMIC"
+msgstr "动态"
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py:131
 #: iqpilot/ui/layouts/settings/iq_panels.py:1081
 #, python-brace-format
 msgid "IQ.Dynamic"
-msgstr "IQ.Dynamic"
+msgstr "动态"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:33
 #, python-brace-format
 msgid "IQ.Dynamic Curves"
-msgstr "IQ.Dynamic 弯道"
+msgstr "弯道减速"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:39
 #, python-brace-format
 msgid "IQ.Dynamic Lead Speed"
-msgstr "IQ.Dynamic 前车车速"
+msgstr "前车车速阈值"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:38
 #, python-brace-format
 msgid "IQ.Dynamic Low Speed"
-msgstr "IQ.Dynamic 低速"
+msgstr "低速阈值"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:36
 #, python-brace-format
 msgid "IQ.Dynamic Model Stops"
-msgstr "IQ.Dynamic 模型停车"
+msgstr "模型停车"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:37
 #, python-brace-format
 msgid "IQ.Dynamic SLC Fallback"
-msgstr "IQ.Dynamic SLC 回退"
+msgstr "限速回退"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:34
 #, python-brace-format
 msgid "IQ.Dynamic Slower Lead"
-msgstr "IQ.Dynamic 前车较慢"
+msgstr "前车减速"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:35
 #, python-brace-format
 msgid "IQ.Dynamic Stopped Lead"
-msgstr "IQ.Dynamic 前车静止"
+msgstr "前车静止"
 
 #: iqpilot/ui/layouts/settings/iq_panels.py:1263
 #, python-brace-format
@@ -1246,12 +1246,12 @@ msgstr "IQ.OS 版本"
 #: openpilot/selfdrive/ui/widgets/exp_mode_button.py:67
 #, python-brace-format
 msgid "IQ.PILOT"
-msgstr "IQ.PILOT"
+msgstr "领航"
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py:131
 #, python-brace-format
 msgid "IQ.Pilot"
-msgstr "IQ.Pilot"
+msgstr "领航"
 
 #: openpilot/selfdrive/ui/onroad/alert_renderer.py:51
 #, python-brace-format
@@ -1274,12 +1274,12 @@ msgstr "IQ.Pilot 要求设备安装在左右 4°、上 5° 或下 9° 以内。"
 #: openpilot/selfdrive/ui/widgets/exp_mode_button.py:69
 #, python-brace-format
 msgid "IQ.STANDARD"
-msgstr "IQ.STANDARD"
+msgstr "标准"
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py:131
 #, python-brace-format
 msgid "IQ.Chill"
-msgstr "IQ.Chill"
+msgstr "舒适"
 
 #: iqpilot/ui/layouts/settings/iq_panels.py:863
 #, python-brace-format
@@ -1639,7 +1639,7 @@ msgstr "网络"
 #: openpilot/selfdrive/ui/mici/layouts/settings/steering.py:106
 #, python-brace-format
 msgid "Neural Net FF"
-msgstr "神经网络 FF"
+msgstr "神经网络前馈"
 
 #: iqpilot/ui/layouts/settings/iq_panels.py:858
 #, python-brace-format
@@ -3494,7 +3494,7 @@ msgstr "交互超时"
 #: openpilot/selfdrive/ui/mici/layouts/settings/cruise.py:81
 #, python-brace-format
 msgid "iq.dynamic settings"
-msgstr "iq.dynamic 设置"
+msgstr "动态设置"
 
 #: openpilot/selfdrive/ui/onroad/hud_renderer.py:248
 #: openpilot/selfdrive/ui/mici/onroad/hud_renderer.py:276
@@ -4149,7 +4149,7 @@ msgstr "警告"
 #: openpilot/selfdrive/ui/mici/layouts/settings/network/network_layout.py:92
 #, python-brace-format
 msgid "wi-fi"
-msgstr "wi-fi"
+msgstr "无线网络"
 
 #: openpilot/selfdrive/ui/mici/layouts/settings/network/wifi_ui.py:259
 #, python-brace-format
@@ -4186,6 +4186,41 @@ msgid_plural "{} minutes ago"
 msgstr[0] "{} 分钟前"
 
 #, python-format
+#: iqpilot/selfdrive/ui/mici/layouts/settings
+#, python-brace-format
+msgid "Pause While You Steer"
+msgstr "转向时暂停"
+
+#: iqpilot/selfdrive/ui/mici/layouts/settings
+#, python-brace-format
+msgid "Lane Edge Guard"
+msgstr "路沿防护"
+
+#: iqpilot/selfdrive/ui/mici/layouts/settings
+#, python-brace-format
+msgid "Blocks lane changes when a road edge is detected on the target side."
+msgstr "目标侧检测到路沿时阻止变道。"
+
+#: iqpilot/selfdrive/ui/mici/layouts/settings
+#, python-brace-format
+msgid "FSD visuals"
+msgstr "FSD 可视化"
+
+#: iqpilot/selfdrive/ui/mici/layouts/settings
+#, python-brace-format
+msgid "big model"
+msgstr "大模型"
+
+#: iqpilot/selfdrive/ui/mici/layouts/settings
+#, python-brace-format
+msgid "active model on eMac"
+msgstr "eMac 使用当前模型"
+
+#: iqpilot/selfdrive/ui/mici/layouts/settings
+#, python-brace-format
+msgid "tap to select"
+msgstr "点击选择"
+
 #~ msgid "1 year of drive storage"
 #~ msgstr "1 年行驶数据存储"
 

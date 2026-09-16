@@ -149,17 +149,23 @@ def _latin_only(text: str) -> bool:
   return all(ord(c) < 0x250 for c in text)
 
 
-def _font_covers(font: rl.Font, text: str) -> bool:
-  count = int(font.glyphCount)
-  if count <= 0 or not text:
+def _bmfont_char_ids(path: Path) -> set[int]:
+  ids: set[int] = set()
+  for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+    if line.startswith("char id="):
+      ids.add(int(line.split("=", 1)[1].split()[0]))
+  return ids
+
+
+def _cjk_covers(text: str) -> bool:
+  ids = getattr(gui_app, "_cjk_ids", None)
+  if not ids:
     return False
-  glyphs = font.glyphs
   for ch in text:
     cp = ord(ch)
-    if cp < 32:
+    if cp < 0x250:
       continue
-    idx = int(rl.get_glyph_index(font, cp))
-    if idx < 0 or idx >= count or int(glyphs[idx].value) != cp:
+    if cp not in ids:
       return False
   return True
 
@@ -170,7 +176,7 @@ def font_fallback(font: rl.Font, text: str = "") -> rl.Font:
     return font
   cjk = gui_app._fonts.get(FontWeight.CJK)
   uni = gui_app._fonts.get(FontWeight.UNIFONT, font)
-  if cjk is not None and _font_covers(cjk, text):
+  if cjk is not None and _cjk_covers(text):
     return cjk
   return uni
 
@@ -261,6 +267,7 @@ class GuiApplication(IQAppHooks):
     self._set_log_callback()
 
     self._fonts: dict[FontWeight, rl.Font] = {}
+    self._cjk_ids: set[int] = set()
     self._width = width if width is not None else GuiApplication._default_width()
     self._height = height if height is not None else GuiApplication._default_height()
 
@@ -960,6 +967,8 @@ class GuiApplication(IQAppHooks):
           rl.gen_texture_mipmaps(font.texture)
           rl.set_texture_filter(font.texture, rl.TextureFilter.TEXTURE_FILTER_TRILINEAR)
         self._fonts[font_weight_file] = font
+        if font_weight_file == FontWeight.CJK and fnt_path.is_file():
+          self._cjk_ids = _bmfont_char_ids(Path(fnt_path))
     rl.gui_set_font(self._fonts[FontWeight.NORMAL])
 
   def _set_styles(self):

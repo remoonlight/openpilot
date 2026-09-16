@@ -6,6 +6,10 @@ from iqpilot.system.ui.lib.application import font_fallback
 def _break_long_word(font: rl.Font, word: str, font_size: int, max_width: int, spacing: float = 0) -> list[str]:
   if not word:
     return []
+  # CJK has no spaces; splitting a title like 曲率控制器 makes later chars pick Noto
+  # while earlier missing glyphs pick unifont. Keep one line; the button scrolls/clips.
+  if any(ord(c) >= 0x250 for c in word):
+    return [word]
 
   parts = []
   remaining = word

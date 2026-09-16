@@ -12,7 +12,7 @@ from iqpilot.system.ui.widgets import Widget
 from iqpilot.system.ui.widgets.label import MiciLabel
 from iqpilot.system.ui.widgets.scroller import DO_ZOOM
 from iqpilot.system.ui.lib.text_measure import measure_text_cached
-from iqpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
+from iqpilot.system.ui.lib.application import gui_app, FontWeight, MousePos, _latin_only
 from iqpilot.common.filter_simple import BounceFilter
 from iqpilot.system.ui.lib.multilang import tr
 
@@ -180,6 +180,10 @@ class BigButton(Widget):
 
     if self.value:
       font_size -= 20
+
+    if self.text and not _latin_only(self.text):
+      usable = max(1, int(self._rect.width - LABEL_HORIZONTAL_PADDING * 2))
+      font_size = min(font_size, max(28, usable // max(len(self.text), 1)))
 
     return font_size
 
