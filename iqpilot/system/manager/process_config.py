@@ -70,6 +70,9 @@ def always_run(started: bool, params: Params, CP: car.CarParams) -> bool:
 def nav_assist(started: bool, params: Params, CP: car.CarParams) -> bool:
   return params.get_bool("IQNavAssistDev") and params.get_bool("IQAndroidNav")
 
+def iqlink_needed(started: bool, params: Params, CP: car.CarParams) -> bool:
+  return params.get_bool("IqlinkEnabled")
+
 def only_onroad(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started
 
@@ -237,6 +240,7 @@ procs += [
   BundleProcess("backup_manager_k3", "iqpilot_hephaestusd_private", "iqpilot_private.konn3kt.backups.backup_orchestrator",
                 and_(only_offroad, hephaestus_ready_shim, not_low_power)),
   BundleProcess("navd", "iqpilot_navd_private", "iqpilot_private.navd.navd", navd_onroad, restart_if_crash=True),
+  PythonProcess("iqlinkd", "iqpilot.iqlink.bridge", iqlink_needed, restart_if_crash=True),
   BundleProcess("navincidentd", "iqpilot_navd_private", "iqpilot_private.navd.navincidentd", navincidentd_onroad, restart_if_crash=True),
   BundleProcess("navrenderd", "iqpilot_navd_private", "iqpilot_private.navd.navrenderd", navrenderd_onroad, restart_if_crash=True),
   BundleProcess("iqmapd", "iqpilot_navd_private", "iqpilot_private.navd.iqmapd", iqmapd_onroad, restart_if_crash=True),
