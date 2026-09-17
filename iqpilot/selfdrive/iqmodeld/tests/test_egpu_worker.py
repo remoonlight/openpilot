@@ -14,6 +14,7 @@ import pytest
 from iqpilot.selfdrive.iqmodeld.egpu_helpers import (
   resolve_backend, resolve_download_url, usbgpu_present,
 )
+from iqpilot.selfdrive.iqmodeld.egpu_policy import MODEL_FORMAT, POLICY_FORMAT, skip_warp_on_dock, warp_on_dock_covers_cam
 from iqpilot.selfdrive.iqmodeld.egpu_pipeline import (
   EgpuPipeline, EgpuPipelineError, make_big_channel_payload,
 )
@@ -36,6 +37,21 @@ def _fake_usb_device(root, vid: str, pid: str, name: str = "1-1", product: str |
   (d / "idVendor").write_text(vid + "\n")
   (d / "idProduct").write_text(pid + "\n")
   (d / "product").write_text((product if product is not None else EGPU_DOCK_FW_PRODUCT) + "\n")
+
+
+class TestWarpOnDockCam:
+  def test_policy_bundle_is_camera_agnostic(self):
+    assert warp_on_dock_covers_cam({"format": POLICY_FORMAT}, (1344, 760))
+
+  def test_mici_rejected_when_only_tici_warp(self):
+    bundle = {"format": MODEL_FORMAT, "run_model": {(1928, 1208): object()}}
+    assert not warp_on_dock_covers_cam(bundle, (1344, 760))
+    assert warp_on_dock_covers_cam(bundle, (1928, 1208))
+
+  def test_mici_skips_hosted_warp_on_dock(self):
+    assert skip_warp_on_dock((1344, 760))
+    assert skip_warp_on_dock((np.int32(1344), np.int32(760)))
+    assert not skip_warp_on_dock((1928, 1208))
 
 
 class TestPresence:

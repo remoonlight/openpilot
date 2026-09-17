@@ -69,6 +69,14 @@ def _wait_bluez_powered(timeout_s: float = BLE_ADAPTER_WAIT_S) -> None:
   )
 
 
+def _set_capnp(builder, name: str, value) -> None:
+  """Skip fields the on-device cereal schema does not have (iqlinkd must not crash)."""
+  try:
+    setattr(builder, name, value)
+  except (AttributeError, OverflowError, TypeError, ValueError):
+    pass
+
+
 def _enum_dir(name: str):
   if name == "left":
     return NavDir.left, TurnDir.turnLeft
@@ -376,11 +384,12 @@ class IqlinkBridge:
     n.cameraType = _enum_cam(str(fields.get("cameraType") or "none"))
     n.cameraDistance = float(fields.get("cameraDistance") or 0.0)
     n.cameraSpeedLimit = float(fields.get("cameraSpeedLimit") or 0.0)
-    n.trafficLight = str(fields.get("trafficLight") or "none")
+    _set_capnp(n, "trafficLight", str(fields.get("trafficLight") or "none"))
     try:
-      n.trafficLightRemainS = int(fields.get("trafficLightRemainS", -1))
+      remain = int(fields.get("trafficLightRemainS", -1))
     except (TypeError, ValueError):
-      n.trafficLightRemainS = -1
+      remain = -1
+    _set_capnp(n, "trafficLightRemainS", remain)
     n.navTurnDesireDirection = nav_d if fields.get("shouldSendTurnDesire") else NavDir.none
     n.navLaneChangeDesireDirection, _ = _enum_dir(str(fields.get("navLaneChangeDesireDirection") or "none"))
     return msg

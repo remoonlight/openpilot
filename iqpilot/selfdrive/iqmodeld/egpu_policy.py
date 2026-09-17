@@ -17,6 +17,18 @@ POLICY_FORMAT = 2
 MODEL_FORMAT = 3
 OOB_MAGIC = b"IQEGPUOOB1"
 QUEUE_NAMES = ("img_q", "big_img_q", "feat_q", "desire_q")
+
+
+def warp_on_dock_covers_cam(bundle: dict, cam_size: tuple[int, int]) -> bool:
+  if bundle.get("format") != MODEL_FORMAT:
+    return True
+  return cam_size in (bundle.get("run_model") or {})
+
+
+# Hosted warp-on-dock pkls currently only JIT 1928x1208 (tici). mici is 1344x760
+# and must use policy_oob + FrameWarp; peeking the pkl is a full GPU unpickle.
+def skip_warp_on_dock(cam_size: tuple[int, int]) -> bool:
+  return tuple(int(x) for x in cam_size) == (1344, 760)
 PACKED_ORDER = ("desire", "traffic_convention", "action_t", "prev_feat")
 MODELD_INPUTS = (*QUEUE_NAMES, "packed_npy_inputs")
 

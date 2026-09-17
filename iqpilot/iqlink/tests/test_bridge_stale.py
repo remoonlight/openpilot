@@ -5,7 +5,15 @@ from __future__ import annotations
 import threading
 import time
 
-from iqpilot.iqlink.bridge import IqlinkBridge, clear_stale_nav_params
+from iqpilot.iqlink.bridge import IqlinkBridge, _set_capnp, clear_stale_nav_params
+
+
+def test_set_capnp_skips_missing_schema_fields():
+  class Dead:
+    def __setattr__(self, name, value):
+      raise AttributeError(f"struct has no such member; name = {name}")
+
+  _set_capnp(Dead(), "trafficLight", "red")
 
 
 class FakeParams:

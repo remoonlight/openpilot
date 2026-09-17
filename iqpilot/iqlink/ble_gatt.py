@@ -532,7 +532,8 @@ class IqlinkBleGatt:
     self._ready = threading.Event()
     self._error: Exception | None = None
     self.running = False
-    self._root = f"/io/iqlink/ble/p{os.getpid()}"
+    # Unique per instance so a leaked previous GATT/agent on this pid cannot block retry.
+    self._root = f"/io/iqlink/ble/p{os.getpid()}g{time.monotonic_ns() % 10_000_000}"
     self._objects: list[_Exported] = []
     self._notify_status = False
     self._values = {"nav": b"", "status": b""}
@@ -582,13 +583,12 @@ class IqlinkBleGatt:
     self._thread = threading.Thread(target=self._run, name="iqlink_ble_gatt", daemon=True)
     self._thread.start()
     if not self._ready.wait(timeout=timeout_s):
-      self._env_worker_stop.set()
-      self._env_slot.wake()
+      self.stop()
       raise RuntimeError("iqlink_ble_start_timeout")
     if self._error is not None:
-      self._env_worker_stop.set()
-      self._env_slot.wake()
-      raise self._error
+      err = self._error
+      self.stop()
+      raise err
 
   def stop(self) -> None:
     self._env_worker_stop.set()
@@ -714,6 +714,14 @@ class IqlinkBleGatt:
       (AGENT_IFACE, "RequestPinCode"): _pin,
       (AGENT_IFACE, "RequestPasskey"): _passkey,
     }
+    try:
+      self.bus.call_sync(
+        BLUEZ_SERVICE, "/org/bluez", AGENT_MANAGER_IFACE, "UnregisterAgent",
+        GLib.Variant("(o)", (self._agent_path,)),
+        None, Gio.DBusCallFlags.NONE, 2000, None,
+      )
+    except Exception:
+      pass
     agent = _Exported(self._agent_path, AGENT_XML, methods=methods)
     agent.register(self.bus)
     self._objects.append(agent)
@@ -1332,6 +1340,12 @@ def run_ble_gatt_loop(ingest_cb: Callable[..., None]) -> None:
       cloudlog.info(f"iqlink ble: discover window {ADV_WINDOW_S:.0f}s")
 
     if enabled and (server is None or not server.running):
+      if server is not None:
+        try:
+          server.stop()
+        except Exception:
+          pass
+        server = None
       try:
         ensure_ble_psk(params)
         server = IqlinkBleGatt(ingest_cb)
@@ -1341,6 +1355,11 @@ def run_ble_gatt_loop(ingest_cb: Callable[..., None]) -> None:
           set_ble_discovering(params, True)
       except Exception as e:
         cloudlog.warning(f"iqlink ble: start failed: {e}")
+        if server is not None:
+          try:
+            server.stop()
+          except Exception:
+            pass
         server = None
         set_ble_link_state(params, LINK_OFF)
         time.sleep(5.0)

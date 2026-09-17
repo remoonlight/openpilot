@@ -49,7 +49,7 @@ from iqpilot.selfdrive.iqmodeld.egpu_telemetry import EgpuDockTelemetry
 from iqpilot.selfdrive.iqmodeld.messaging import DrivePacketMemory, populate_drive_messages, populate_odometry_message
 from iqpilot.selfdrive.iqmodeld.metadata import Meta20hz
 from iqpilot.selfdrive.iqmodeld.model_channel import BIG_CHANNEL, ModelChannel
-from iqpilot.selfdrive.iqmodeld.egpu_policy import MODEL_FORMAT, POLICY_FORMAT, ModelRunner, PolicyRunner, load_bundle
+from iqpilot.selfdrive.iqmodeld.egpu_policy import MODEL_FORMAT, POLICY_FORMAT, ModelRunner, PolicyRunner, load_bundle, skip_warp_on_dock, warp_on_dock_covers_cam
 from iqpilot.selfdrive.iqmodeld.model_warp import FrameWarp
 from iqpilot.selfdrive.iqmodeld.parser import PhaseParser
 
@@ -151,14 +151,40 @@ def _compile_in_subprocess(meta: dict, onnx_path: str, pkl_path: str, cam_size: 
 
 _precompiled_tried = False
 _model_precompiled_tried = False
+_unusable_artifacts: set[str] = set()
+
+
+def _usable_file(path: str) -> bool:
+  return os.path.isfile(path) and os.path.abspath(path) not in _unusable_artifacts
+
+
+def _mark_unusable(path: str) -> None:
+  _unusable_artifacts.add(os.path.abspath(path))
+
+
+def _file_covers_cam(path: str, cam_size: tuple[int, int]) -> bool:
+  try:
+    return warp_on_dock_covers_cam(load_bundle(path), cam_size)
+  except Exception as e:
+    cloudlog.warning(f"iqegpumodeld cannot inspect {path}: {e}")
+    return False
 
 
 def _ensure_artifact(params: Params, meta: dict, cam_size: tuple[int, int]) -> str:
   global _precompiled_tried, _model_precompiled_tried
   model_path = egpu_model_oob_pkl_path(meta)
-  if os.path.isfile(model_path):
+  if skip_warp_on_dock(cam_size):
+    cloudlog.warning(f"iqegpumodeld skip warp-on-dock for {cam_size[0]}x{cam_size[1]}; using on-device warp")
+    _model_precompiled_tried = True
+    if os.path.isfile(model_path):
+      _mark_unusable(model_path)
+  elif _usable_file(model_path) and _file_covers_cam(model_path, cam_size):
     return model_path
-  if meta.get("egpu_model_oob_artifact") and not _model_precompiled_tried:
+  elif _usable_file(model_path):
+    cloudlog.warning(f"iqegpumodeld skip warp-on-dock {model_path}; no {cam_size[0]}x{cam_size[1]} (use on-device warp)")
+    _model_precompiled_tried = True
+    _mark_unusable(model_path)
+  elif meta.get("egpu_model_oob_artifact") and not _model_precompiled_tried:
     _model_precompiled_tried = True
     params.put_bool("UsbGpuCompiled", False)
     params.put_bool("UsbGpuReady", False)
@@ -174,14 +200,16 @@ def _ensure_artifact(params: Params, meta: dict, cam_size: tuple[int, int]) -> s
       size_mb = int(meta["egpu_model_oob_artifact"].get("size", 0)) / 1e6
       cloudlog.warning(f"iqegpumodeld downloading precompiled {meta['key']} (warp-on-dock, {size_mb:.0f}MB)")
       precompiled = download_precompiled(meta, progress_cb=_model_prog, field="egpu_model_oob_artifact")
-      if precompiled is not None:
+      if precompiled is not None and _file_covers_cam(precompiled, cam_size):
         cloudlog.warning(f"iqegpumodeld precompiled ready -> {precompiled}")
         return precompiled
+      if precompiled is not None:
+        cloudlog.warning(f"iqegpumodeld warp-on-dock {precompiled} has no {cam_size[0]}x{cam_size[1]}; falling back")
     except Exception as e:
       cloudlog.warning(f"iqegpumodeld warp-on-dock artifact unavailable ({e}); falling back")
 
   oob_path = egpu_oob_pkl_path(meta)
-  if os.path.isfile(oob_path):
+  if _usable_file(oob_path):
     return oob_path
   policy_path = egpu_policy_pkl_path(meta)
   legacy_path = egpu_pkl_path(meta)
@@ -209,7 +237,7 @@ def _ensure_artifact(params: Params, meta: dict, cam_size: tuple[int, int]) -> s
     except Exception as e:
       cloudlog.warning(f"iqegpumodeld streamable artifact unavailable ({e}); falling back")
 
-  if os.path.isfile(policy_path):
+  if _usable_file(policy_path):
     return policy_path
 
   if meta.get("egpu_policy_artifact") and not _precompiled_tried:
@@ -232,7 +260,7 @@ def _ensure_artifact(params: Params, meta: dict, cam_size: tuple[int, int]) -> s
     except Exception as e:
       cloudlog.warning(f"iqegpumodeld precompiled policy unavailable ({e}); falling back")
 
-  if os.path.isfile(legacy_path):
+  if _usable_file(legacy_path):
     cloudlog.warning(f"iqegpumodeld using legacy per-tensor artifact {legacy_path}; policy artifact not hosted yet")
     return legacy_path
 
@@ -293,6 +321,7 @@ def _load_infer_fn(pkl_path: str, meta: dict, cam_size: tuple[int, int]):
     jits = bundle["run_model"]
     if cam_size not in jits:
       have = ", ".join(f"{w}x{h}" for w, h in sorted(jits))
+      _mark_unusable(pkl_path)
       raise RuntimeError(f"artifact has no warp for the {cam_size[0]}x{cam_size[1]} camera (bundled: {have})")
     runner = ModelRunner(jits[cam_size], bundle["input_spec"], int(bundle["frame_skip"]), meta["output_slices"]["hidden_state"],
                          bundle.get("input_device", "AMD"), int(bundle["frame_copy_size"][cam_size]))
