@@ -8,7 +8,7 @@ import time
 import pyray as rl
 
 from iqpilot.common.params import Params
-from iqpilot.ui.onroad.big_model_status import SourceState, draw_source_label, resolve_source
+from iqpilot.ui.onroad.big_model_status import SourceState, draw_source_label, resolve_source, source_text
 from iqpilot.selfdrive.ui import UI_BORDER_SIZE
 from iqpilot.selfdrive.ui.onroad.driver_state import BTN_SIZE
 from iqpilot.selfdrive.ui.ui_state import ui_state
@@ -76,6 +76,11 @@ class EmacStatusRenderer(Widget):
     x = int(rect.x + UI_BORDER_SIZE + BTN_SIZE // 2 - tex.width / 2)
     y = int(rect.y + rect.height / 2 - tex.height / 2)
     rl.draw_texture(tex, x, y, tint)
+    if self._state == SourceState.LOADING:
+      pct = source_text(self._label, self._state, self._params)
+      if pct != self._label:
+        draw_source_label(self._font, pct.split(" ", 1)[-1], self._state,
+                          rl.Vector2(x + tex.width + 8, y + (tex.height - 36) / 2), 36)
     if self._state == SourceState.CROSSED:
       cy = y + tex.height // 2
       rl.draw_line_ex(rl.Vector2(x - 4, cy), rl.Vector2(x + tex.width + 4, cy), 4, rl.Color(255, 255, 255, 165))

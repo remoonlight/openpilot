@@ -22,6 +22,16 @@ COMMA_LFS_BATCH_URL = "https://gitlab.com/commaai/openpilot-lfs.git/info/lfs/obj
 DOWNLOAD_CHUNK = 4 * 1024 * 1024
 
 
+def nested_tc_parity_enabled() -> bool:
+  # Nested --tc-off needs a second USB AMD open; the parent compile already holds the flock.
+  # ponytail: opt-in IQ_EGPU_PARITY for a two-pass runner that has not opened the GPU.
+  if os.environ.get("IQ_EGPU_SKIP_PARITY"):
+    return False
+  if os.environ.get("TC_OPT") == "0":
+    return False
+  return bool(os.environ.get("IQ_EGPU_PARITY"))
+
+
 def usbgpu_present(sysfs_root: str = USB_SYSFS_ROOT) -> bool:
   return egpu_dock_ready(Path(sysfs_root))
 

@@ -7,12 +7,13 @@ import time
 import pyray as rl
 
 from iqpilot.common.params import Params
-from iqpilot.ui.onroad.big_model_status import SourceState, draw_source_label, resolve_source
+from iqpilot.ui.onroad.big_model_status import SourceState, draw_source_label, resolve_source, source_text
 from iqpilot.selfdrive.ui.ui_state import ui_state
 from iqpilot.system.ui.lib.application import FontWeight, gui_app
 from iqpilot.system.ui.lib.text_measure import measure_text_cached
 
 _POLL_S = 1.0
+_POLL_LOADING_S = 0.25
 _FONT_SIZE = 44
 _WHEEL_H = 50
 _MARGIN_R = 12
@@ -29,10 +30,12 @@ class EmacSourceIndicator:
 
   def update(self) -> None:
     now = time.monotonic()
-    if now - self._last_poll < _POLL_S:
+    interval = _POLL_LOADING_S if self._state == SourceState.LOADING else _POLL_S
+    if now - self._last_poll < interval:
       return
     self._last_poll = now
-    self._label, self._state = resolve_source(self._params, ui_state.engaged)
+    label, self._state = resolve_source(self._params, ui_state.engaged)
+    self._label = source_text(label, self._state, self._params)
 
   def render(self, rect: rl.Rectangle) -> None:
     if self._state == SourceState.HIDDEN:

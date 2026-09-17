@@ -43,11 +43,37 @@ def _egpu_state(params: Params, engaged: bool) -> SourceState:
 
 
 def resolve_source(params: Params, engaged: bool) -> tuple[str, SourceState]:
+  # Same priority as resolve_backend: a present dock owns the big channel even if eMac is still on.
+  if params.get_bool("UsbGpuPresent") and not params.get_bool("IQEgpuDisabled"):
+    return "GPU", _egpu_state(params, engaged)
   if params.get_bool("IQEmacEnabled"):
     return "MAC", _emac_state(params, engaged)
-  if params.get_bool("UsbGpuPresent") or params.get_bool("IQEgpuEnabled"):
+  if params.get_bool("IQEgpuEnabled"):
     return "GPU", _egpu_state(params, engaged)
   return "", SourceState.HIDDEN
+
+
+def setup_progress(params: Params, label: str) -> float | None:
+  if label != "GPU":
+    return None
+  try:
+    raw = params.get("UsbGpuSetupProgress")
+    if raw in (None, "", b""):
+      return None
+    if isinstance(raw, (bytes, bytearray)):
+      raw = raw.decode()
+    return max(0.0, min(1.0, float(raw)))
+  except (TypeError, ValueError, AttributeError):
+    return None
+
+
+def source_text(label: str, state: SourceState, params: Params) -> str:
+  if state != SourceState.LOADING:
+    return label
+  progress = setup_progress(params, label)
+  if progress is None:
+    return label
+  return f"{label} {int(round(progress * 100))}%"
 
 
 def draw_source_label(font: rl.Font, label: str, state: SourceState,

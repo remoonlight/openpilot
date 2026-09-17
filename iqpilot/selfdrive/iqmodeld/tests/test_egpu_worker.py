@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from iqpilot.selfdrive.iqmodeld.egpu_helpers import (
-  resolve_backend, resolve_download_url, usbgpu_present,
+  nested_tc_parity_enabled, resolve_backend, resolve_download_url, usbgpu_present,
 )
 from iqpilot.selfdrive.iqmodeld.egpu_policy import MODEL_FORMAT, POLICY_FORMAT, skip_warp_on_dock, warp_on_dock_covers_cam
 from iqpilot.selfdrive.iqmodeld.egpu_pipeline import (
@@ -74,6 +74,29 @@ class TestPresence:
     (tmp_path / "usb1").mkdir()
     _fake_usb_device(tmp_path, "add1", "0001", name="1-2")
     assert usbgpu_present(str(tmp_path))
+
+
+class TestNestedTcParity:
+  def test_default_off(self, monkeypatch):
+    monkeypatch.delenv("IQ_EGPU_PARITY", raising=False)
+    monkeypatch.delenv("IQ_EGPU_SKIP_PARITY", raising=False)
+    monkeypatch.setenv("TC_OPT", "2")
+    assert not nested_tc_parity_enabled()
+
+  def test_opt_in(self, monkeypatch):
+    monkeypatch.delenv("IQ_EGPU_SKIP_PARITY", raising=False)
+    monkeypatch.setenv("IQ_EGPU_PARITY", "1")
+    monkeypatch.setenv("TC_OPT", "2")
+    assert nested_tc_parity_enabled()
+
+  def test_skip_and_tc_off(self, monkeypatch):
+    monkeypatch.setenv("IQ_EGPU_PARITY", "1")
+    monkeypatch.setenv("IQ_EGPU_SKIP_PARITY", "1")
+    monkeypatch.setenv("TC_OPT", "2")
+    assert not nested_tc_parity_enabled()
+    monkeypatch.delenv("IQ_EGPU_SKIP_PARITY")
+    monkeypatch.setenv("TC_OPT", "0")
+    assert not nested_tc_parity_enabled()
 
 
 class TestBackendResolution:

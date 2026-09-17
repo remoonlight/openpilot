@@ -25,7 +25,7 @@ os.environ.setdefault("DEV", "USB+AMD:LLVM")
 
 import numpy as np
 
-from iqpilot.selfdrive.iqmodeld.egpu_helpers import egpu_pkl_path, local_onnx, patch_tinygrad_fetch_fw
+from iqpilot.selfdrive.iqmodeld.egpu_helpers import egpu_pkl_path, local_onnx, nested_tc_parity_enabled, patch_tinygrad_fetch_fw
 from iqpilot.selfdrive.iqmodeld.egpu_model import EGPU_MODELS, get_egpu_model, resolve_egpu_model
 from iqpilot.selfdrive.iqmodeld.temporal_state import MODEL_INPUT_SPEC, spec_from_meta
 
@@ -267,7 +267,7 @@ def compile_policy_model(meta: dict, onnx_path: str, out_path: str) -> str:
   from iqpilot.selfdrive.iqmodeld.tools.compile_supercombo import _slice_outputs, _validate_pose_outputs
   _validate_pose_outputs(PhaseParser().parse_vision_outputs(_slice_outputs(outs[-1], meta["output_slices"])))
 
-  if os.environ.get("TC_OPT") != "0" and not os.environ.get("IQ_EGPU_SKIP_PARITY"):
+  if nested_tc_parity_enabled():
     _parity_check(meta["key"], outs[-1], _tc_off_reference(onnx_path, meta))
 
   os.replace(tmp, out_path)
@@ -386,7 +386,7 @@ def compile_model_v3(meta: dict, onnx_path: str, out_path: str,
   from iqpilot.selfdrive.iqmodeld.tools.compile_supercombo import _slice_outputs, _validate_pose_outputs
   _validate_pose_outputs(PhaseParser().parse_vision_outputs(_slice_outputs(outs[resolutions[0]][-1], meta["output_slices"])))
 
-  if os.environ.get("TC_OPT") != "0" and not os.environ.get("IQ_EGPU_SKIP_PARITY"):
+  if nested_tc_parity_enabled():
     ref = _tc_off_reference(onnx_path, meta, fmt=3, resolutions=resolutions)
     for (w, h) in resolutions:
       _parity_check(meta["key"], outs[(w, h)][-1], ref[f"{w}x{h}"], label=f"{w}x{h} ")

@@ -4,7 +4,7 @@ Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed 
 The BIG (tici/tizi) and SMALL (mici) onroad source indicators share one
 resolver (comma PR #38492 states, backend-aware label). Pin its truth table.
 """
-from iqpilot.ui.onroad.big_model_status import SourceState, resolve_source
+from iqpilot.ui.onroad.big_model_status import SourceState, resolve_source, source_text
 
 
 class _FakeParams:
@@ -13,6 +13,9 @@ class _FakeParams:
 
   def get_bool(self, key: str) -> bool:
     return bool(self._flags.get(key, False))
+
+  def get(self, key: str):
+    return self._flags.get(key)
 
 
 def _resolve(engaged=False, **flags):
@@ -33,10 +36,16 @@ def test_egpu_label_is_gpu():
   assert label == "GPU"
 
 
-def test_emac_wins_when_both_enabled():
+def test_dock_wins_when_both_enabled():
   label, _ = _resolve(IQEmacEnabled=True, IQEgpuEnabled=True,
                       MacModelReachable=True, UsbGpuPresent=True)
+  assert label == "GPU"
+
+
+def test_emac_when_dock_absent():
+  label, state = _resolve(IQEmacEnabled=True, IQEgpuEnabled=True, MacModelReachable=True)
   assert label == "MAC"
+  assert state == SourceState.LOADING
 
 
 def test_egpu_states_mirror_emac():
@@ -64,3 +73,15 @@ def test_emac_states():
 def test_failed_but_disconnected_is_hidden():
   # unplugged mid-drive: nothing to show, not a red/orange "failed"
   assert _resolve(IQEmacEnabled=True, MacModelReachable=False, MacModelFailed=True)[1] == SourceState.HIDDEN
+
+
+def test_disabled_dock_falls_back_to_emac():
+  label, _ = _resolve(IQEmacEnabled=True, IQEgpuDisabled=True, UsbGpuPresent=True, MacModelReachable=True)
+  assert label == "MAC"
+
+
+def test_gpu_loading_appends_percent():
+  p = _FakeParams(UsbGpuSetupProgress="0.552")
+  assert source_text("GPU", SourceState.LOADING, p) == "GPU 55%"
+  assert source_text("GPU", SourceState.ACTIVE, p) == "GPU"
+  assert source_text("MAC", SourceState.LOADING, p) == "MAC"
