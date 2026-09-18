@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import math
+import os
+import time
 import numpy as np
 
 import iqpilot.cereal.messaging as messaging
@@ -106,6 +108,45 @@ def get_accel_candidates(e2e, has_lead, mpc_candidate, cruise_candidate, e2e_can
   if e2e:
     candidates.append(e2e_candidate)
   return candidates
+
+
+def parent_nav_go(planner, sm, light_path="/dev/shm/iqlink_traffic_light") -> bool:
+  """Leave the line without gas: nav cruise, APK green (shm), or RTOR."""
+  nav_valid = bool(getattr(planner, "nav_valid", False))
+  speed = float(getattr(planner, "nav_speed_target", 0.0) or 0.0)
+  nav_go = (
+    nav_valid
+    and not bool(getattr(planner, "nav_stop_request", False))
+    and speed > 0.0
+    and float(getattr(planner, "nav_accel_target", 0.0) or 0.0) >= 0.0
+  )
+  if nav_valid and speed > 0.0:
+    try:
+      if (time.time() - os.stat(light_path).st_mtime) <= 3.0:
+        color = open(light_path, encoding="utf-8").read().strip().split()[:1]
+        if color and color[0].strip().lower() == "green":
+          nav_go = True
+    except Exception:
+      pass
+  try:
+    nav = sm["iqNavState"]
+    mtype = getattr(nav, "nextManeuverType", None)
+    mdir = getattr(nav, "nextManeuverDirection", None)
+    mdist = float(getattr(nav, "nextManeuverDistance", 0.0) or 0.0)
+    mtype_n = getattr(mtype, "name", None) or str(mtype or "")
+    mdir_n = getattr(mdir, "name", None) or str(mdir or "")
+    if "turn" in mtype_n.lower() and "right" in mdir_n.lower() and 0.0 < mdist <= 150.0:
+      nav_go = True
+  except Exception:
+    pass
+  return nav_go
+
+
+def apply_parent_standstill_hold(CS, nav_go, output_a_target, output_should_stop):
+  """Once nearly stopped, keep shouldStop until gas or nav_go."""
+  if (not nav_go) and (CS.standstill or CS.vEgo <= 0.75) and not CS.gasPressed:
+    return True, min(float(output_a_target), 0.0)
+  return bool(output_should_stop), output_a_target
 
 
 def stopped_lead_hold(prev_hold, v_ego, stopping_speed, lead_status, lead_d_rel, lead_v_lead, override_active) -> bool:
@@ -291,6 +332,8 @@ class LongitudinalPlanner(LongitudinalPlannerIQ):
       )
 
     self.output_should_stop = self.output_should_stop or self.forcing_stop or self.lead_hold
+    self.output_should_stop, output_a_target = apply_parent_standstill_hold(
+      cs, parent_nav_go(self, sm), output_a_target, self.output_should_stop)
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
 
     self.a_desired = float(self.output_a_target)
