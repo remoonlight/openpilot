@@ -285,7 +285,7 @@ msgstr "在适用该 Beta 实现的斯巴鲁平台上，跟车停止后自动重
 #: iqpilot/ui/layouts/settings/iq_panels.py:712
 #, python-brace-format
 msgid "Availability While Cruise Changes"
-msgstr "巡航状态切换时的可用性"
+msgstr "巡航状态切换\n时的可用性"
 
 #: system/ui/widgets/network.py:96
 #: openpilot/selfdrive/ui/layouts/onboarding.py:148
@@ -806,7 +806,7 @@ msgstr "驾驶员摄像头检查"
 #: iqpilot/ui/layouts/settings/iq_panels.py:717
 #, python-brace-format
 msgid "Driver Intervention Handling"
-msgstr "驾驶员干预处理"
+msgstr "驾驶员\n干预处理"
 
 #: openpilot/selfdrive/ui/widgets/prime.py:181
 #: iqpilot/ui/layouts/settings/drive_history.py:99
