@@ -6,10 +6,9 @@ import os
 import math
 import time
 from iqdbc.can import CANParser
-from iqdbc.car import DT_CTRL, Bus, structs
+from iqdbc.car import Bus, structs
 from iqdbc.car.interfaces import CarStateBase
 from iqdbc.car.common.conversions import Conversions as CV
-from iqdbc.car.common.filter_simple import FirstOrderFilter
 from iqdbc.car.volkswagen.values import CAR, DBC, CanBus, NetworkLocation, RADAR_DISABLE_STATE, TransmissionType, GearShifter, \
                                                       CarControllerParams, VolkswagenFlags, VolkswagenFlagsIQ
 from iqdbc.car.volkswagen.speed_limit_manager import SpeedLimitManager
@@ -29,7 +28,34 @@ class CarState(CarStateBase):
   CRUISE_FAULT_LATERAL_DISABLE_FRAMES = 20
   MEB_TEMP_CRUISE_FAULT = 6
   MEB_TOLERANCE_MAX = 100
-  DRIVER_TORQUE_TAU = 0.10
+  MEB_CREEP_HOLD_V = 0.75
+  # Stock TSK=6 during OP auto-stop shows up around 11 km/h, before creep/hold.
+  MEB_STOP_OVERLAY_V = 8.0
+  # Stock TSK=7 at a completed stop often beats ESP hold / vEgoRaw==0 by a frame.
+  MEB_HARD_STOP_V = 2.0
+  MEB_BRAKE_OVERLAY_FRAMES = 300
+
+  @classmethod
+  def meb_tsk_cruise_flags(cls, tsk_status, standstill, esp_hold, was_enabled, *,
+                           near_standstill: bool = False, driver_braking: bool = False,
+                           stop_overlay: bool = False, hard_stop_overlay: bool = False):
+    temp_fault = tsk_status == cls.MEB_TEMP_CRUISE_FAULT
+    hard_fault = tsk_status == 7
+    hold = standstill or esp_hold or (near_standstill and was_enabled)
+    temp_at_hold = temp_fault and (hold or (stop_overlay and was_enabled))
+    temp_brake_overlay = temp_fault and driver_braking
+    hard_at_hold = hard_fault and was_enabled and (hold or hard_stop_overlay)
+    standstill_temp = temp_at_hold or hard_at_hold
+    if tsk_status in (3, 4, 5):
+      was_enabled = True
+    elif tsk_status in (0, 1) or (hard_fault and not hard_at_hold):
+      was_enabled = False
+    available = tsk_status in (2, 3, 4, 5) or standstill_temp or temp_brake_overlay
+    enabled = tsk_status in (3, 4, 5) or (standstill_temp and was_enabled)
+    acc_faulted = (hard_fault and not hard_at_hold) or (
+      temp_fault and not temp_at_hold and not temp_brake_overlay
+    )
+    return acc_faulted, available, enabled, was_enabled
 
   def __init__(self, CP, CP_IQ):
     from iqpilot.system.proprietary_runtime._verified_import import import_verified_module
@@ -39,7 +65,6 @@ class CarState(CarStateBase):
     self.frame = 0
     self.eps_init_complete = False
     self.CCP = CarControllerParams(CP)
-    self.driver_torque_filter = FirstOrderFilter(0.0, self.DRIVER_TORQUE_TAU, DT_CTRL)
     self.button_states = {button.event_type: False for button in self.CCP.BUTTONS}
     self.esp_hold_confirmation = False
     self.upscale_lead_car_signal = False
@@ -65,6 +90,8 @@ class CarState(CarStateBase):
     self.cruise_fault_clear_frames = 0
     self.cruise_fault_lateral_active = False
     self.cruise_faulted = False
+    self._meb_long_was_enabled = False
+    self._meb_brake_overlay_frames = 0
     self.grade = 0.0
     self.rolling_backward = False
     self.rolling_forward = False
@@ -326,7 +353,7 @@ class CarState(CarStateBase):
     ret.steeringRateDeg = pt_cp.vl["LWI_01"]["LWI_Lenkradw_Geschw"] * (1, -1)[int(pt_cp.vl["LWI_01"]["LWI_VZ_Lenkradw_Geschw"])]
     ret.steeringTorque = pt_cp.vl["LH_EPS_03"]["EPS_Lenkmoment"] * (1, -1)[int(pt_cp.vl["LH_EPS_03"]["EPS_VZ_Lenkmoment"])]
     driver_override_threshold = self._iq_lvbs_alc.vw_driver_override_threshold_cnm(self, "mqb", self.CCP.STEER_DRIVER_ALLOWANCE)
-    ret.steeringPressed = abs(self.driver_torque_filter.update(ret.steeringTorque)) > driver_override_threshold
+    ret.steeringPressed = abs(ret.steeringTorque) > driver_override_threshold
 
     self.curvature = -pt_cp.vl["QFK_01"]["Curvature"] * (1, -1)[int(pt_cp.vl["QFK_01"]["Curvature_VZ"])]
     ret.steeringCurvature = self.curvature
@@ -384,21 +411,30 @@ class CarState(CarStateBase):
     self.acc_type = ext_cp.vl["ACC_18"]["ACC_Typ"]
     self.travel_assist_available = bool(pt_cp.vl.get("TA_01", {}).get("Travel_Assist_Available", 0))
 
-    ret.cruiseState.available = pt_cp.vl["Motor_51"]["TSK_Status"] in (2, 3, 4, 5)
-    ret.cruiseState.enabled = pt_cp.vl["Motor_51"]["TSK_Status"] in (3, 4, 5)
-    # TSK winds its braking down through brake_only after a driver brake. Requesting drive-off in this
-    # state can fault TSK, and stock refuses to engage here as well, so block entry until it clears.
-    ret.carNotReady = pt_cp.vl["Motor_51"]["TSK_Status"] == 5  # brake_only
-    acc_values = ext_cp.vl.get("MEB_ACC_01", ext_cp.vl.get("ACC_19", {}))
-    ret.cruiseState.nonAdaptive = bool(acc_values.get("ACC_Limiter_Mode", 0)) if self.CP.pcmCruise else bool(pt_cp.vl["Motor_51"]["TSK_Limiter_ausgewaehlt"])
-
-    acc_faulted = pt_cp.vl["Motor_51"]["TSK_Status"] in (6, 7)
-    ret.accFaulted = self.update_acc_fault(acc_faulted, parking_brake=ret.parkingBrake, drive_mode=drive_mode)
-
+    tsk_status = pt_cp.vl["Motor_51"]["TSK_Status"]
     if self.CP.flags & VolkswagenFlags.MQB_EVO:
       self.esp_hold_confirmation = bool(pt_cp.vl["ESP_21"]["ESP_Haltebestaetigung"])
     else:
       self.esp_hold_confirmation = pt_cp.vl["ESC_50"]["Motion_State"] == 3
+    if ret.brakePressed:
+      self._meb_brake_overlay_frames = self.MEB_BRAKE_OVERLAY_FRAMES
+    elif self._meb_brake_overlay_frames > 0:
+      self._meb_brake_overlay_frames -= 1
+    stopped = ret.vEgo < self.MEB_HARD_STOP_V or ret.vEgoRaw < self.MEB_HARD_STOP_V
+    acc_faulted, available, enabled, self._meb_long_was_enabled = self.meb_tsk_cruise_flags(
+      tsk_status, ret.standstill, self.esp_hold_confirmation, self._meb_long_was_enabled,
+      near_standstill=ret.vEgo < self.MEB_CREEP_HOLD_V,
+      driver_braking=ret.brakePressed or self._meb_brake_overlay_frames > 0,
+      stop_overlay=ret.vEgo < self.MEB_STOP_OVERLAY_V,
+      hard_stop_overlay=stopped,
+    )
+    ret.cruiseState.available = available
+    ret.cruiseState.enabled = enabled
+    ret.carNotReady = tsk_status == 5
+    acc_values = ext_cp.vl.get("MEB_ACC_01", ext_cp.vl.get("ACC_19", {}))
+    ret.cruiseState.nonAdaptive = bool(acc_values.get("ACC_Limiter_Mode", 0)) if self.CP.pcmCruise else bool(pt_cp.vl["Motor_51"]["TSK_Limiter_ausgewaehlt"])
+
+    ret.accFaulted = self.update_acc_fault(acc_faulted, parking_brake=ret.parkingBrake, drive_mode=drive_mode)
     ret.cruiseState.standstill = self.CP.pcmCruise and self.esp_hold_confirmation
 
     if self.CP.pcmCruise:
@@ -679,7 +715,7 @@ class CarState(CarStateBase):
     if self.CP.carFingerprint == CAR.PORSCHE_MACAN_MK1:
       ret.gearShifter = self.parse_gear_shifter(self.CCP.shifter_values.get(pt_cp.vl["Getriebe_03"]["GE_Waehlhebel"], None))
     elif self.CP.transmissionType == TransmissionType.manual:
-      reverse = bool(br_cp.vl["Gateway_05"]["BCM1_Rueckfahrlicht_Schalter"])
+      reverse = bool(pt_cp.vl["Gateway_05"]["BCM1_Rueckfahrlicht_Schalter"])
       ret.gearShifter = GearShifter.reverse if reverse else GearShifter.drive
     else:
       ret.gearShifter = GearShifter.drive
@@ -776,10 +812,6 @@ class CarState(CarStateBase):
       ret.steerFaultTemporary, ret.steerFaultPermanent = False, True
       return
 
-    if self.CP.flags & VolkswagenFlags.MLB:
-      # MLB LWS zero is vehicle-specific (measured 2.5 deg off centre on an 8R); the EPS angle is what the rack closes its own loop on
-      ret.steeringAngleDeg = pt_cp.vl["LH_EPS_03"]["EPS_Berechneter_LW"] * (1, -1)[int(pt_cp.vl["LH_EPS_03"]["EPS_VZ_BLW"])]
-
     ret.steeringTorque = pt_cp.vl["LH_EPS_03"]["EPS_Lenkmoment"] * (1, -1)[int(pt_cp.vl["LH_EPS_03"]["EPS_VZ_Lenkmoment"])]
     ret.steeringPressed = abs(ret.steeringTorque) > self.CCP.STEER_DRIVER_ALLOWANCE
 
@@ -845,7 +877,6 @@ class CarState(CarStateBase):
       pt_messages += [
         ("Blinkmodi_01", math.nan),  # From J519 BCM (is inactive when no lights active, 50Hz when active)
         ("Kombi_02", math.nan),  # Auxiliary-bus cluster odometer
-        ("LH_EPS_01", math.nan),  # ALC key slot, absent on MLB racks that never send 0x32A
       ]
     else:
       pt_messages += [("Kombi_02", math.nan)]  # Auxiliary-bus cluster odometer

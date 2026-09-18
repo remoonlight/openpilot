@@ -26,7 +26,7 @@ sys.path.insert(0, iqpilot_path)
 try:
   from iqpilot.common.params import Params
 except ImportError:
-  pass
+  from openpilot.common.params import Params
 
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
 AudibleAlert = structs.CarControl.HUDControl.AudibleAlert
@@ -123,15 +123,18 @@ class MQBStandstillManager:
     if CS.out.brakePressed:
       long_active = False
 
-    if long_active and not CS.out.gasPressed:
-      if CS.esp_hold_confirmation:
+    if not long_active:
+      self.start_commit_active = False
+    elif CS.out.gasPressed:
+      # Driver go: allow MEB takeoff. ESP-hold alone must not.
+      if below_safe_stop_speed:
         self.start_commit_active = True
-      if can_accelerate and below_safe_stop_speed and accel > 0:
-        self.start_commit_active = True
-      elif self.start_commit_active:
-        if CS.out.vEgo > safe_stopping_speed:
-          self.start_commit_active = False
-    else:
+    elif stopping or accel <= 0.0 or CS.out.standstill or CS.out.vEgo <= 0.75:
+      # iq-link1 stop-hold: do not convert a completed stop into start_commit takeoff.
+      self.start_commit_active = False
+    elif can_accelerate and below_safe_stop_speed and accel > 0:
+      self.start_commit_active = True
+    elif self.start_commit_active and CS.out.vEgo > safe_stopping_speed:
       self.start_commit_active = False
 
     if long_active:
@@ -188,27 +191,6 @@ class MQBStandstillManager:
     self.prev_accel = accel
     return long_active, accel, stopping, starting, esp_starting_override, esp_stopping_override
 
-
-def accel_during_driver_override(accel: float, gas_pressed: bool, keep_long_active: bool) -> float:
-  return 0.0 if gas_pressed and keep_long_active else accel
-
-
-def ea_send_ready(stock_values, last_counter):
-  return bool(stock_values) and stock_values["COUNTER"] != last_counter
-
-
-EA_BLINKER_STEP = 2
-
-
-def next_ea_counter(tx_counter, stock_counter):
-  return ((stock_counter if tx_counter is None else tx_counter) + 1) % 16
-
-
-def ea_blinker_command(left_request, right_request, left_active, right_active):
-  blinker_active = left_active or right_active
-  return left_request and not blinker_active, right_request and not blinker_active
-
-
 class CarController(CarControllerBase):
   def __init__(self, dbc_names, CP, CP_IQ):
     from iqpilot.system.proprietary_runtime._verified_import import import_verified_module
@@ -257,8 +239,6 @@ class CarController(CarControllerBase):
     self.sng_handoff_active = False
     self.acc_counter_seeded = False
     self.klr_counter_last = None
-    self.ea_counter_last = None
-    self.ea_tx_counter = None
     self.eps_timer_soft_disable_alert = False
     self.hca_frame_timer_running = 0
     self.hca_frame_same_torque = 0
@@ -398,9 +378,7 @@ class CarController(CarControllerBase):
             self.LateralController.reset()
           if self.steering_power_last > 0:
             hca_enabled = True
-            handoff_curvature = self.apply_curvature_last + (CS.out.steeringCurvature - self.apply_curvature_last) * self.CCP.CURVATURE_HANDOFF_RATE
-            apply_curvature = apply_std_curvature_limits(handoff_curvature, self.apply_curvature_last, CS.out.vEgoRaw, CS.out.steeringCurvature,
-                                                         CS.out.steeringPressed, self.CCP.STEER_STEP, True, self.CCP.CURVATURE_LIMITS)
+            apply_curvature = np.clip(CS.out.steeringCurvature, -self.CCP.CURVATURE_LIMITS.CURVATURE_MAX, self.CCP.CURVATURE_LIMITS.CURVATURE_MAX)
             steering_power = max(self.steering_power_last - self.CCP.STEERING_POWER_STEP, 0)
           else:
             hca_enabled = False
@@ -480,14 +458,12 @@ class CarController(CarControllerBase):
         self.klr_counter_last = CS.klr_stock_values["COUNTER"]
 
     if self.CP.flags & (VolkswagenFlags.MEB | VolkswagenFlags.MQB_EVO):
-      if CS.ea_hud_stock_values and self.frame % EA_BLINKER_STEP == 0:
-        self.ea_tx_counter = next_ea_counter(self.ea_tx_counter, CS.ea_hud_stock_values["COUNTER"])
-        left_blinker, right_blinker = ea_blinker_command(
-          CC.leftBlinker, CC.rightBlinker, CS.left_blinker_active, CS.right_blinker_active,
-        )
+      if self.frame % 2 == 0:
+        blinker_active = CS.left_blinker_active or CS.right_blinker_active
+        left_blinker = CC.leftBlinker if not blinker_active else False
+        right_blinker = CC.rightBlinker if not blinker_active else False
         can_sends.append(self.CCS.create_blinker_control(self.packer_pt, self.CAN.pt, CS.ea_hud_stock_values, CS.ea_control_stock_values,
-                                                         left_blinker, right_blinker, self.hide_ea_error, self.ea_tx_counter))
-        self.ea_counter_last = CS.ea_hud_stock_values["COUNTER"]
+                                                         left_blinker, right_blinker, self.hide_ea_error))
 
     if self.CP.openpilotLongitudinalControl and self.CCS in (mqbcan, mlbcan) and not self.acc_counter_seeded and CS.acc_stock_counters:
       seed_msgs = ("ACC_01", "ACC_02") if self.CCS is mlbcan else ("ACC_02", "ACC_06", "ACC_07", "ACC_10")
@@ -499,8 +475,16 @@ class CarController(CarControllerBase):
     if self.frame % self.CCP.ACC_CONTROL_STEP == 0 and self.CP.openpilotLongitudinalControl and not CS.out.radarDisableFailed:
       stopping = actuators.longControlState == LongCtrlState.stopping
       if self.CP.flags & (VolkswagenFlags.MEB | VolkswagenFlags.MQB_EVO):
-        starting = actuators.longControlState == LongCtrlState.pid and (CS.esp_hold_confirmation or CS.out.vEgo < 0.25)
         accel = float(np.clip(actuators.accel, self.CCP.ACCEL_MIN, self.CCP.ACCEL_MAX) if CC.enabled else 0)
+        starting = mebcan.compute_meb_long_starting(
+          actuators.longControlState, CS.out.vEgo, float(getattr(self.CP, "vEgoStarting", 0.5)),
+          CS.esp_hold_confirmation, stopping, CC.enabled, getattr(CS.out, "buttonEvents", ()), accel,
+        )
+        if CS.out.gasPressed and (CS.esp_hold_confirmation or CS.out.vEgo <= 0.75):
+          starting = True
+        stopping = mebcan.compute_meb_finish_stop(
+          starting, stopping, CS.out.vEgo, accel, CS.esp_hold_confirmation,
+        )
 
         long_override = CC.cruiseControl.override or CS.out.gasPressed
 
@@ -527,9 +511,9 @@ class CarController(CarControllerBase):
         self.accel_last = accel
       else:
         stopping = actuators.longControlState == LongCtrlState.stopping
-        starting = actuators.longControlState == LongCtrlState.pid and (CS.esp_hold_confirmation or CS.out.vEgo < 0.25)
+        starting = False
         long_active = CC.longActive
-        accel = accel_during_driver_override(actuators.accel, CS.out.gasPressed, self.CP_IQ.longActiveWithGasOverride)
+        accel = actuators.accel
         esp_starting_override = None
         esp_stopping_override = None
 

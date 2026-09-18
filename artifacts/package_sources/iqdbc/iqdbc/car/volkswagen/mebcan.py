@@ -55,9 +55,8 @@ def create_eps_update(packer, bus, eps_stock_values, ea_simulated_torque):
   return packer.make_can_msg("LH_EPS_03", bus, values)
 
 
-def create_blinker_control(packer, bus, ea_hud_stock_values, ea_control_stock_values, left_blinker, right_blinker, hide_error, counter=None):
+def create_blinker_control(packer, bus, ea_hud_stock_values, ea_control_stock_values, left_blinker, right_blinker, hide_error):
   values = {s: ea_hud_stock_values[s] for s in [
-    "COUNTER",
     "EA_Texte",
     "ACF_Lampe_Hands_Off",
     "EA_Infotainment_Anf",
@@ -69,9 +68,6 @@ def create_blinker_control(packer, bus, ea_hud_stock_values, ea_control_stock_va
     "EA_Blinken",
     "EA_Unknown",
   ]}
-
-  if counter is not None:
-    values["COUNTER"] = counter
 
   if ea_hud_stock_values["EA_Blinken"] == 0:
     values.update({
@@ -164,6 +160,44 @@ def acc_control_value(main_switch_on, acc_faulted, long_active, override):
     acc_control = ACC_CTRL_DISABLED # long control deactivated state
 
   return acc_control
+
+
+def compute_meb_long_starting(long_control_state, v_ego, v_ego_starting, esp_hold_confirmation, stopping,
+                            cc_enabled=False, button_events=(), accel=0.0):
+  """iq-link1: do not release MEB hold on pid flicker while still braking.
+
+  Extra: accel<=0 at hold is idle, not takeoff (stop-then-creep). SET/RESUME still starts.
+  """
+  if esp_hold_confirmation and cc_enabled:
+    for be in button_events or ():
+      if not getattr(be, "pressed", False):
+        continue
+      name = getattr(getattr(be, "type", None), "name", None) or str(getattr(be, "type", ""))
+      if name in ("setCruise", "resumeCruise"):
+        return True
+  # iq-link1: only auto-start when not still commanding a brake. Planner holds
+  # a<=0 / shouldStop while !nav_go; IQlink nav_go yields positive a → start.
+  if accel <= 0:
+    return False
+  state_name = getattr(long_control_state, "name", None) or str(long_control_state)
+  return (
+    state_name.endswith("pid")
+    and v_ego <= v_ego_starting
+    and (esp_hold_confirmation or not stopping)
+  )
+
+
+def compute_meb_finish_stop(starting, stopping, v_ego, accel, esp_hold, v_finish=1.2):
+  """Latch HMS HOLD through the last meters.
+
+  If longControl stays in pid at creep, ACC_Anforderung_HMS goes NO_REQUEST,
+  the car never stops, then stock TSK=7 raises Cruise Fault.
+  """
+  if starting:
+    return False
+  if stopping or esp_hold:
+    return True
+  return v_ego <= v_finish and accel <= 0.15
 
 
 def acc_hold_type(main_switch_on, acc_faulted, long_active, starting, stopping, esp_hold, v_ego,
