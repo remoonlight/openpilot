@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 import math
-import os
-import time
 import numpy as np
 
 import iqpilot.cereal.messaging as messaging
@@ -110,24 +108,14 @@ def get_accel_candidates(e2e, has_lead, mpc_candidate, cruise_candidate, e2e_can
   return candidates
 
 
-def parent_nav_go(planner, sm, light_path="/dev/shm/iqlink_traffic_light") -> bool:
-  """Leave the line without gas: nav cruise, APK green (shm), or RTOR."""
-  nav_valid = bool(getattr(planner, "nav_valid", False))
-  speed = float(getattr(planner, "nav_speed_target", 0.0) or 0.0)
+def parent_nav_go(planner, sm) -> bool:
+  """6c834a5: nav prestart / green cruise / RTOR may leave the line without gas."""
   nav_go = (
-    nav_valid
+    bool(getattr(planner, "nav_valid", False))
     and not bool(getattr(planner, "nav_stop_request", False))
-    and speed > 0.0
+    and float(getattr(planner, "nav_speed_target", 0.0) or 0.0) > 0.0
     and float(getattr(planner, "nav_accel_target", 0.0) or 0.0) >= 0.0
   )
-  if nav_valid and speed > 0.0:
-    try:
-      if (time.time() - os.stat(light_path).st_mtime) <= 3.0:
-        color = open(light_path, encoding="utf-8").read().strip().split()[:1]
-        if color and color[0].strip().lower() == "green":
-          nav_go = True
-    except Exception:
-      pass
   try:
     nav = sm["iqNavState"]
     mtype = getattr(nav, "nextManeuverType", None)
@@ -151,6 +139,8 @@ def apply_parent_standstill_hold(CS, nav_go, output_a_target, output_should_stop
 
 def stopped_lead_hold(prev_hold, v_ego, stopping_speed, lead_status, lead_d_rel, lead_v_lead, override_active) -> bool:
   if override_active or not lead_status or lead_d_rel >= LEAD_HOLD_GAP:
+    return False
+  if lead_v_lead > LEAD_HOLD_V_ARM:
     return False
   if prev_hold:
     return True
@@ -301,7 +291,7 @@ class LongitudinalPlanner(LongitudinalPlannerIQ):
     )
 
     output_a_target, self.mpc.source, _ = min(candidates, key=lambda c: c[0])
-    self.output_should_stop = any(should_stop for _, _, should_stop in candidates)
+    want_stop = any(should_stop for _, _, should_stop in candidates)
 
     cs = sm['carState']
     hold_override = bool(cs.gasPressed) or any(
@@ -331,9 +321,9 @@ class LongitudinalPlanner(LongitudinalPlannerIQ):
         interval_sec=5.0,
       )
 
-    self.output_should_stop = self.output_should_stop or self.forcing_stop or self.lead_hold
+    want_stop = want_stop or self.forcing_stop or self.lead_hold
     self.output_should_stop, output_a_target = apply_parent_standstill_hold(
-      cs, parent_nav_go(self, sm), output_a_target, self.output_should_stop)
+      cs, parent_nav_go(self, sm), output_a_target, want_stop)
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
 
     self.a_desired = float(self.output_a_target)

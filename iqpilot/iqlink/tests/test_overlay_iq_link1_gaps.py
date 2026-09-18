@@ -92,12 +92,20 @@ def test_cruise_hides_map_speed_limit_menu():
 
 
 def test_nav_exec_floor():
-  kph_to_ms = 1 / 3.6
-  floor = 60.0 * kph_to_ms
-  city = 40.0 * kph_to_ms
-  assert max(city, 0.0, floor) == floor
-  highway = 80.0 * kph_to_ms
-  assert max(highway, 0.0, floor) == highway
+  planner = Path(__file__).resolve().parents[2] / "selfdrive/controls/lib/iq_longitudinal_planner.py"
+  src = planner.read_text(encoding="utf-8")
+  assert "_NAV_EXEC_MIN_MS = 60.0 * CV.KPH_TO_MS" in src
+  assert "nav_exec_speed_ms" not in src
+  city = 40.0 / 3.6
+  floor = 60.0 / 3.6
+  highway = 80.0 / 3.6
+  approach = 30.0 / 3.6
+  assert abs(max(city, 0.0, floor) - floor) < 1e-6
+  assert abs(max(highway, 0.0, floor) - highway) < 1e-6
+  assert abs(max(approach, 0.0, floor) - floor) < 1e-6
+  assert "if has_follow_lead:" in src
+  assert "self.nav_stop_request = False" in src
+  assert "def _nav_device_offset_ms" in src
 
 
 def test_overlay_stock_maps_hard_off():

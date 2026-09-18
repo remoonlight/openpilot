@@ -23,10 +23,14 @@ def test_stopped_close_stationary_lead_arms():
 
 
 def test_armed_holds_until_gap_opens():
-  # Seg 5 05:16: radar vLead jumped 0.28 -> 1.40 at 3.6 m; stay held.
-  assert stopped_lead_hold(True, 0.0, STOPPING_SPEED, True, 3.6, 1.40, False) is True
-  assert stopped_lead_hold(True, 0.0, STOPPING_SPEED, True, 4.9, 3.36, False) is True
+  # Lead pulling away (vLead > LEAD_HOLD_V_ARM) must release so follow-lead can start.
+  assert stopped_lead_hold(True, 0.0, STOPPING_SPEED, True, 3.6, 1.40, False) is False
+  assert stopped_lead_hold(True, 0.0, STOPPING_SPEED, True, 4.9, 3.36, False) is False
   assert stopped_lead_hold(True, 0.0, STOPPING_SPEED, True, 5.6, 3.92, False) is False
+
+
+def test_armed_holds_while_lead_still_stopped():
+  assert stopped_lead_hold(True, 0.0, STOPPING_SPEED, True, 3.6, 0.0, False) is True
 
 
 def test_gap_and_missing_lead_release():

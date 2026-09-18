@@ -1,6 +1,4 @@
 """Parent planner standstill hold helpers (no cereal import)."""
-import os
-import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,7 +9,7 @@ def _load_helpers():
   src = _PLANNER.read_text(encoding="utf-8")
   start = src.index("def parent_nav_go")
   end = src.index("\nclass LongitudinalPlanner")
-  ns = {"os": os, "time": time}
+  ns = {}
   exec(src[start:end], ns)
   return ns
 
@@ -70,13 +68,3 @@ def test_parent_nav_go_right_turn_window():
     nextManeuverDistance=40.0,
   )
   assert parent_nav_go(planner, {"iqNavState": nav}) is True
-
-
-def test_parent_nav_go_shm_green(tmp_path):
-  p = tmp_path / "iqlink_traffic_light"
-  p.write_text("green 8", encoding="utf-8")
-  planner = SimpleNamespace(nav_valid=True, nav_stop_request=True, nav_speed_target=16.6, nav_accel_target=-2.0)
-  assert parent_nav_go(planner, {}, light_path=str(p)) is True
-  past = time.time() - 10
-  os.utime(p, (past, past))
-  assert parent_nav_go(planner, {}, light_path=str(p)) is False

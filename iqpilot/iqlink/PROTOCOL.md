@@ -50,7 +50,8 @@ Deprecated (do not use as fallback): UDP 7705 / 7706, TCP 7713.
 - **Sticky limit (R1):** keep last limit / lights / TBT until the next change. Timeouts do **not** clear the snapshot.
 - **TBT distance:** no TBT speed cap. Turns / LC / exits keep road-limit `speedTarget`; curve slowdown is IQ.Dynamic. Lateral desire still fires in-window.
 - **Green wave / SDI:** not in scope (no phone uplink; device ignores).
-- **Road limit:** BLE reports raw `nRoadLimitSpeed` for HUD; execution = raw + device offset with a **usual floor of 60 km/h**. `IQSpeedAssistValueOffset` has no UI today and is factually `0`; invalid limit → do not invent; no snapshot → follow lead / model.
+- **Road limit:** BLE reports raw `nRoadLimitSpeed` for HUD; execution = raw + device offset with a **floor of 60 km/h**. `IQSpeedAssistValueOffset` has no UI today and is factually `0`; invalid limit → do not invent; no snapshot → follow lead / model.
+- **Device long mode (comma):** IQ.Pilot (`AlphaLongitudinalEnabled` + `ExperimentalMode`, `IQDynamicMode` off). `EnableSLPredReactToCurves` defaults on.
 - **Traffic lights:** red/yellow aggressive decel toward stop (`accelTarget≈-2`); yellow near-distance treated like red; lead has priority; no fake green. Explicit `trafficLightRemainS` of **0 or 1** plus envelope clock aligned (`|now-ts|≤120s`) releases nav red-stop (`accelTarget≥0`). Omitted remainS keeps red stop until green. Never fake green.
 - **Lane B (gate only):** `KEY_TYPE=13012` → `laneRecommend`; `straight` suppresses auto lane-change desire. No lane-change HUD.
 - **Cruise UI:** product max set speed `V_CRUISE_PRODUCT_MAX_KPH=120`.
@@ -113,7 +114,7 @@ canonical_json = json.dumps(data, ensure_ascii=True, sort_keys=True, separators=
 
 - **产品**：车上无导航会话；IQ-link只推即时参数；停导不清参；已连 = 设备 `LinkState=2`。
 - **传输**：仅 BLE GATT；7705/7706/7713 已废弃。comma 自带离线地图 / OSM `mapd` / 离线路由永久不做，不要再打开。
-- **纵向**：变更驱动 + 粘限速；限速原值上报、执行侧常保底 60；`IQSpeedAssistValueOffset` 当前无 UI、事实为 0；红黄猛减速；remainS 0/1 且时钟对齐可放行；省略 remainS 保持红停；无绿波/SDI；车道 B 仅直行门控；无 TBT 压速。
+- **纵向**：变更驱动 + 粘限速；限速原值上报、执行侧保底 60；`IQSpeedAssistValueOffset` 当前无 UI、事实为 0；红黄猛减速；remainS 0/1 且时钟对齐可放行；省略 remainS 保持红停；无绿波/SDI；车道 B 仅直行门控；无 TBT 压速。设备档位 IQ.Pilot；弯道预测限速默认开。
 - **TBT**：lc* → fork，真出口 → exit；到站 150m 内只停横向 desire，HUD 出口提示另做档位/剩余距离门控。
 - **Cereal：** IQ-link 不改 `custom.capnp`；红绿灯走 `/dev/shm/iqlink_traffic_light`；官方 `@62/@63` 仍是 mapbox 限速。
 - **PSK**：固定 `999999`，设置页不显示。

@@ -2,6 +2,8 @@
 Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed under https://konn3kt.com/tos
 """
 from datetime import datetime
+import os
+import time
 
 import numpy as np
 
@@ -26,6 +28,78 @@ SpeedLimitSource = custom.IQPlan.SpeedLimit.Source
 NavProvider = custom.IQNavState.LongitudinalProvider
 NavLongitudinalState = custom.IQNavState.LongitudinalState
 
+_NAV_EXEC_MIN_MS = 60.0 * CV.KPH_TO_MS
+_GEAR = structs.CarState.GearShifter
+
+
+def nav_long_blocked_by_gear(gear) -> bool:
+  """Park/reverse must not inherit leftover IQlink speedTarget."""
+  return gear in (_GEAR.park, _GEAR.reverse)
+
+
+def nav_long_blocked(gear, *, link_warn: bool = False) -> bool:
+  """Also drop nav long while BLE is stale (snapshot kept, speed no longer live)."""
+  return nav_long_blocked_by_gear(gear) or bool(link_warn)
+
+
+# ponytail: tmpfs sidecar; official IQNavState has no trafficLight field.
+def read_iqlink_traffic_light(path="/dev/shm/iqlink_traffic_light", max_age_s=3.0) -> str:
+  try:
+    if (time.time() - os.stat(path).st_mtime) > float(max_age_s):
+      return "none"
+    color = open(path, encoding="utf-8").read().strip().split()[:1]
+    return (color[0].strip().lower() if color else "none") or "none"
+  except Exception:
+    return "none"
+
+
+def iqlink_nav_go(*, nav_valid, nav_stop_request, nav_speed_target, nav_accel_target,
+                  traffic_light: str = "none") -> bool:
+  """iq-link1: nav prestart / green cruise may leave the line without gas."""
+  if not bool(nav_valid):
+    return False
+  light = str(traffic_light or "none").strip().lower()
+  # APK green is hard go (left-arrow green included).
+  if light == "green" and float(nav_speed_target or 0.0) > 0.0:
+    return True
+  return (
+    not bool(nav_stop_request)
+    and float(nav_speed_target or 0.0) > 0.0
+    and float(nav_accel_target or 0.0) >= 0.0
+  )
+
+
+def iqlink_right_turn_yield(nav_state, *, window_m: float = 150.0) -> bool:
+  """China RTOR: imminent APK right turn — do not hold / force-stop for the light."""
+  if nav_state is None:
+    return False
+  try:
+    mtype = getattr(nav_state, "nextManeuverType", None)
+    mtype_name = getattr(mtype, "name", None) or str(mtype or "")
+    if "turn" not in mtype_name.lower():
+      return False
+    direction = getattr(nav_state, "nextManeuverDirection", None)
+    dir_name = getattr(direction, "name", None) or str(direction or "")
+    if "right" not in dir_name.lower():
+      return False
+    dist = float(getattr(nav_state, "nextManeuverDistance", 0.0) or 0.0)
+    return 0.0 < dist <= float(window_m)
+  except Exception:
+    return False
+
+
+def hold_at_standstill(CS, *, nav_go: bool = False, light_stop_active: bool = False,
+                      lead_moving: bool = False, vision_go: bool = False) -> bool:
+  """Hold only for an active single-light stop. ACC/lead resume without APK/BLE."""
+  if not light_stop_active:
+    return False
+  if nav_go or lead_moving or vision_go or bool(getattr(CS, "gasPressed", False)):
+    return False
+  if bool(getattr(CS, "standstill", False)):
+    return True
+  return float(getattr(CS, "vEgo", 0.0) or 0.0) <= 0.75
+
+
 class LongitudinalPlannerIQ:
   def __init__(self, CP: structs.CarParams, CP_IQ: structs.IQCarParams, mpc):
     self.events_iq = IQEvents()
@@ -35,6 +109,11 @@ class LongitudinalPlannerIQ:
     self.generation = int(model_bundle.generation) if (model_bundle := get_active_bundle()) else None
     self.source = LongitudinalPlanSource.cruise
     self.e2e_alerts = EndToEndAlertEngine()
+    try:
+      from iqpilot.common.params import Params
+      self._params = Params()
+    except Exception:
+      self._params = None
     self.output_v_target = 0.
     self.output_a_target = 0.
     self.speed_limit_last = 0.
@@ -45,12 +124,28 @@ class LongitudinalPlannerIQ:
     self.nav_state = NavLongitudinalState.disabled
     self.nav_speed_target = 0.
     self.nav_accel_target = 0.
+    self.nav_traffic_light = "none"
     self.nav_valid = False
+    self.nav_stop_request = False
     self.force_stop_timer = 0.0
     self.forcing_stop = False
     self.override_force_stop = False
     self.override_force_stop_timer = 0.0
     self.tracked_model_length = 0.0
+
+  def _nav_device_offset_ms(self) -> float:
+    offset = float(getattr(self.slimit, "slc_offset", 0.0) or 0.0)
+    if offset != 0.0:
+      return offset
+    if self._params is None:
+      return 0.0
+    try:
+      raw = self._params.get("IQSpeedAssistValueOffset", return_default=True)
+      value = float(raw) if raw is not None else 0.0
+      is_metric = bool(self._params.get_bool("IsMetric"))
+      return value * (CV.KPH_TO_MS if is_metric else CV.MPH_TO_MS)
+    except Exception:
+      return 0.0
 
   def is_e2e(self, sm: messaging.SubMaster) -> bool:
     experimental_mode = sm['selfdriveState'].experimentalMode
@@ -73,7 +168,9 @@ class LongitudinalPlannerIQ:
     self.nav_state = getattr(nav_state, "longitudinalState", NavLongitudinalState.disabled)
     self.nav_speed_target = float(getattr(nav_state, "speedTarget", 0.0))
     self.nav_accel_target = float(getattr(nav_state, "accelTarget", 0.0))
+    self.nav_traffic_light = read_iqlink_traffic_light()
     self.nav_valid = bool(getattr(nav_state, "valid", False) and self.nav_engaged)
+    self.nav_stop_request = bool(self.nav_valid and self.nav_speed_target <= 0.0)
 
     # IQ.Pilot custom Speed Limit Controller
     now = datetime.now()
@@ -103,6 +200,7 @@ class LongitudinalPlannerIQ:
       "Dashboard": SpeedLimitSource.car,
       "Map Data": SpeedLimitSource.map,
       "Mapbox": SpeedLimitSource.map,
+      "Iqlink": SpeedLimitSource.map,
       "None": SpeedLimitSource.none,
     }
     self.speed_limit_source = source_map.get(display_source, SpeedLimitSource.none)
@@ -111,11 +209,67 @@ class LongitudinalPlannerIQ:
       LongitudinalPlanSource.cruise: v_cruise,
       LongitudinalPlanSource.speedLimitAssist: slc_v_cruise,
     }
-    if self.nav_valid:
-      targets[LongitudinalPlanSource.nav] = self.nav_speed_target
+    has_follow_lead = False
+    lead_moving = False
+    try:
+      lead = sm['radarState'].leadOne
+      has_follow_lead = bool(getattr(lead, "status", False))
+      lead_moving = has_follow_lead and float(getattr(lead, "vLead", 0.0) or 0.0) > 1.0
+    except Exception:
+      has_follow_lead = False
+      lead_moving = False
+    if has_follow_lead:
+      self.nav_stop_request = False
+    link_warn = False
+    if self._params is not None:
+      try:
+        link_warn = bool(self._params.get_bool("IqlinkLinkWarn"))
+      except Exception:
+        link_warn = False
+    block_nav = nav_long_blocked(CS.gearShifter, link_warn=link_warn)
+    nav_stop_live = bool(self.nav_stop_request and not block_nav)
+    vision_stop = False
+    try:
+      vision_stop = bool(self.iq_dynamic.force_stop_requested())
+    except Exception:
+      vision_stop = False
+    light_stop_active = bool(nav_stop_live or vision_stop or self.forcing_stop)
+    vision_go = bool(not vision_stop and not nav_stop_live)
+    if self.nav_valid and not has_follow_lead and not block_nav:
+      if self.nav_stop_request:
+        targets[LongitudinalPlanSource.nav] = 0.0
+      else:
+        targets[LongitudinalPlanSource.nav] = max(self.nav_speed_target, 0.0, _NAV_EXEC_MIN_MS) + self._nav_device_offset_ms()
+    try:
+      pred_on = bool(self._params and self._params.get_bool("EnableSLPredReactToCurves"))
+      pred_v = float(getattr(CS.cruiseState, "speedLimitPredicative", 0.0) or 0.0)
+      if pred_on and pred_v > 0.0 and LongitudinalPlanSource.nav in targets and not self.nav_stop_request:
+        if pred_v < targets[LongitudinalPlanSource.nav]:
+          targets[LongitudinalPlanSource.nav] = pred_v
+    except Exception:
+      pass
 
     self.source = min(targets, key=lambda k: targets[k])
     self.output_v_target = targets[self.source]
+    nav_go = iqlink_nav_go(
+      nav_valid=self.nav_valid and not block_nav,
+      nav_stop_request=self.nav_stop_request,
+      nav_speed_target=self.nav_speed_target,
+      nav_accel_target=self.nav_accel_target,
+      traffic_light=getattr(self, "nav_traffic_light", "none"),
+    ) or iqlink_right_turn_yield(nav_state)
+    if hold_at_standstill(
+      CS,
+      nav_go=nav_go,
+      light_stop_active=light_stop_active,
+      lead_moving=lead_moving,
+      vision_go=vision_go and light_stop_active,
+    ):
+      self.output_v_target = 0.0
+      if self.output_a_target > 0.0:
+        self.output_a_target = 0.0
+    if nav_stop_live:
+      self.output_v_target = min(self.output_v_target, 0.0)
     self.output_v_target = self._apply_force_stop(self.output_v_target, v_ego, sm, slc_apply_enabled)
     # envelope shaping only in Assist mode: info/warn must never change the plan
     self._envelope_enabled = (slc_apply_enabled and bool(getattr(self.slimit, "controller_enabled", False))
@@ -156,7 +310,23 @@ class LongitudinalPlannerIQ:
     return self.custom_stop_distance.adjust_e2e_stop(a_target, should_stop, v_ego, sm['modelV2'])
 
   def _apply_force_stop(self, v_target: float, v_ego: float, sm: messaging.SubMaster, apply_enabled: bool) -> float:
-    force_stop = self.iq_dynamic.force_stop_requested() and apply_enabled and self.override_force_stop_timer <= 0.0
+    nav_go = iqlink_nav_go(
+      nav_valid=getattr(self, "nav_valid", False),
+      nav_stop_request=getattr(self, "nav_stop_request", False),
+      nav_speed_target=getattr(self, "nav_speed_target", 0.0),
+      nav_accel_target=getattr(self, "nav_accel_target", 0.0),
+      traffic_light=getattr(self, "nav_traffic_light", "none"),
+    )
+    try:
+      nav_go = nav_go or iqlink_right_turn_yield(sm["iqNavState"])
+    except Exception:
+      pass
+    force_stop = (
+      self.iq_dynamic.force_stop_requested()
+      and apply_enabled
+      and self.override_force_stop_timer <= 0.0
+      and not nav_go
+    )
     self.force_stop_timer = self.force_stop_timer + DT_MDL if force_stop else 0.0
     force_stop_enabled = self.force_stop_timer >= 1.0
     force_stop_ramp_time = max(float(getattr(self.iq_dynamic, "model_stop_time", IQConstants.FORCE_STOP_PLANNER_TIME)), DT_MDL)

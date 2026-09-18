@@ -414,7 +414,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"EnableLongComfortMode", {PERSISTENT, BOOL, "0"}},
     {"EnableSpeedLimitPredicative", {PERSISTENT, BOOL, "0"}},
     {"EnableSLPredReactToSL", {PERSISTENT, BOOL, "0"}},
-    {"EnableSLPredReactToCurves", {PERSISTENT, BOOL, "0"}},
+    {"EnableSLPredReactToCurves", {PERSISTENT, BOOL, "1"}},
     {"ForceRHDForBSM", {PERSISTENT, BOOL, "0"}},
     {"NavDestination", {PERSISTENT, STRING}},
     {"eBrakeActive", {CLEAR_ON_MANAGER_START, BOOL, "0"}},

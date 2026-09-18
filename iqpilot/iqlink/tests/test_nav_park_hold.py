@@ -5,8 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 _PLANNER = (
-  Path(__file__).resolve().parents[1]
-  / "overlay_beta/selfdrive/controls/lib/iq_longitudinal_planner.py"
+  Path(__file__).resolve().parents[2]
+  / "selfdrive/controls/lib/iq_longitudinal_planner.py"
 )
 
 
@@ -14,7 +14,12 @@ def _load_helpers():
   src = _PLANNER.read_text(encoding="utf-8")
   start = src.index("def nav_long_blocked_by_gear")
   end = src.index("\nclass LongitudinalPlannerIQ")
-  ns = {"_GEAR": SimpleNamespace(park="park", reverse="reverse", drive="drive"), "os": os, "time": time}
+  ns = {
+    "_GEAR": SimpleNamespace(park="park", reverse="reverse", drive="drive"),
+    "os": os,
+    "time": time,
+    "_NAV_EXEC_MIN_MS": 60.0 / 3.6,
+  }
   exec(src[start:end], ns)
   return ns
 
