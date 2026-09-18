@@ -19,7 +19,7 @@ Notes:
 - There is **no** “cancel navigation” product control on the car.
 - Legacy param names such as `NavigationActive` / `IqlinkExclusive` are implementation leftovers — not product features.
 - **Connected (product / QA):** phone ↔ device can communicate = device HMAC `LinkState=2`. Phone GATT “connected” alone is not enough.
-- **Cereal on beta:** Gaode `trafficLight` / `trafficLightRemainS` are `IQNavState` **@62 / @63**. This overlay targets the `beta` tree; do not use the release-tree `@49/@50` history as a field mapping.
+- **Cereal on beta:** IQ-link does **not** add cereal fields. Gaode lights go to `/dev/shm/iqlink_traffic_light` (`"<color> <remainS>"`). Official `IQNavState` **@62 / @63** stay `mapboxSpeedLimit` / `mapboxSpeedLimitValid`.
 
 ## TBT icons (Gaode NEW_ICON → device bucket)
 
@@ -115,6 +115,6 @@ canonical_json = json.dumps(data, ensure_ascii=True, sort_keys=True, separators=
 - **传输**：仅 BLE GATT；7705/7706/7713 已废弃。comma 自带离线地图 / OSM `mapd` / 离线路由永久不做，不要再打开。
 - **纵向**：变更驱动 + 粘限速；限速原值上报、执行侧常保底 60；`IQSpeedAssistValueOffset` 当前无 UI、事实为 0；红黄猛减速；remainS 0/1 且时钟对齐可放行；省略 remainS 保持红停；无绿波/SDI；车道 B 仅直行门控；无 TBT 压速。
 - **TBT**：lc* → fork，真出口 → exit；到站 150m 内只停横向 desire，HUD 出口提示另做档位/剩余距离门控。
-- **Cereal（beta）**：高德红绿灯字段为 `IQNavState @62/@63`；不要按 release 树历史的 `@49/@50` 映射。
+- **Cereal：** IQ-link 不改 `custom.capnp`；红绿灯走 `/dev/shm/iqlink_traffic_light`；官方 `@62/@63` 仍是 mapbox 限速。
 - **PSK**：固定 `999999`，设置页不显示。
 - **契约细节以上方英文为准**；字段以实现 `protocol.py` 为准。

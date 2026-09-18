@@ -32,7 +32,6 @@ FILES = (
   ("iqpilot/iqlink/overlay_beta/selfdrive/assets/fonts/NotoSansSC-Regular.png",
    "iqpilot/selfdrive/assets/fonts/NotoSansSC-Regular.png"),
   ("iqpilot/iqlink/overlay_beta/common/params_keys.h", "iqpilot/common/params_keys.h"),
-  ("iqpilot/iqlink/overlay_beta/cereal/custom.capnp", "iqpilot/cereal/custom.capnp"),
   ("iqpilot/iqlink/overlay_beta/selfdrive/controls/lib/iq_longitudinal_planner.py",
    "iqpilot/selfdrive/controls/lib/iq_longitudinal_planner.py"),
   ("iqpilot/iqlink/overlay_beta/selfdrive/controls/lib/speed_limit_controller.py",

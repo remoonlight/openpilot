@@ -69,14 +69,6 @@ def _wait_bluez_powered(timeout_s: float = BLE_ADAPTER_WAIT_S) -> None:
   )
 
 
-def _set_capnp(builder, name: str, value) -> None:
-  """Skip fields the on-device cereal schema does not have (iqlinkd must not crash)."""
-  try:
-    setattr(builder, name, value)
-  except (AttributeError, OverflowError, TypeError, ValueError):
-    pass
-
-
 def _enum_dir(name: str):
   if name == "left":
     return NavDir.left, TurnDir.turnLeft
@@ -270,6 +262,12 @@ class IqlinkBridge:
     try:
       with open("/dev/shm/iqlink_road_speed_ms", "w", encoding="utf-8") as f:
         f.write(f"{float(fields.get('roadSpeedLimit') or 0.0):.4f}")
+      try:
+        remain = int(fields.get("trafficLightRemainS", -1))
+      except (TypeError, ValueError):
+        remain = -1
+      with open("/dev/shm/iqlink_traffic_light", "w", encoding="utf-8") as f:
+        f.write(f"{str(fields.get('trafficLight') or 'none')} {remain}")
     except Exception:
       pass
     self.params.put_bool("IqlinkExclusive", True)
@@ -289,6 +287,11 @@ class IqlinkBridge:
     msg.iqNavState.valid = False
     msg.iqNavState.longitudinalEngaged = False
     self.pm.send("iqNavState", msg)
+    try:
+      with open("/dev/shm/iqlink_traffic_light", "w", encoding="utf-8") as f:
+        f.write("none -1")
+    except Exception:
+      pass
     render = messaging.new_message("iqNavRenderState")
     render.iqNavRenderState.active = False
     self.pm.send("iqNavRenderState", render)
@@ -384,12 +387,6 @@ class IqlinkBridge:
     n.cameraType = _enum_cam(str(fields.get("cameraType") or "none"))
     n.cameraDistance = float(fields.get("cameraDistance") or 0.0)
     n.cameraSpeedLimit = float(fields.get("cameraSpeedLimit") or 0.0)
-    _set_capnp(n, "trafficLight", str(fields.get("trafficLight") or "none"))
-    try:
-      remain = int(fields.get("trafficLightRemainS", -1))
-    except (TypeError, ValueError):
-      remain = -1
-    _set_capnp(n, "trafficLightRemainS", remain)
     n.navTurnDesireDirection = nav_d if fields.get("shouldSendTurnDesire") else NavDir.none
     n.navLaneChangeDesireDirection, _ = _enum_dir(str(fields.get("navLaneChangeDesireDirection") or "none"))
     return msg

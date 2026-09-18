@@ -115,6 +115,18 @@ def test_overlay_stock_maps_hard_off():
   assert '{"OfflineRoutingEnabled", {PERSISTENT, BOOL, "0"}}' in keys_h
 
 
+def test_overlay_does_not_ship_custom_capnp():
+  overlay_cereal = ROOT / "cereal"
+  assert not overlay_cereal.exists()
+  deploy = (Path(__file__).resolve().parents[1] / "tools/deploy_iqlink_overlay.py").read_text(encoding="utf-8")
+  assert "cereal/custom.capnp" not in deploy
+  official = Path(__file__).resolve().parents[2] / "cereal/custom.capnp"
+  src = official.read_text(encoding="utf-8")
+  assert "mapboxSpeedLimit @62" in src
+  assert "mapboxSpeedLimitValid @63" in src
+  assert "trafficLight @62" not in src
+
+
 if __name__ == "__main__":
   test_min_display_speed_limit()
   test_meb_tsk_hard_brake_overlay()
@@ -123,4 +135,5 @@ if __name__ == "__main__":
   test_cruise_hides_map_speed_limit_menu()
   test_nav_exec_floor()
   test_overlay_stock_maps_hard_off()
+  test_overlay_does_not_ship_custom_capnp()
   print("ok")

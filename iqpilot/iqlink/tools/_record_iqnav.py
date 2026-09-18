@@ -8,6 +8,15 @@ import time
 
 import cereal.messaging as messaging
 
+_LIGHT_SHM = "/dev/shm/iqlink_traffic_light"
+
+
+def _shm_light():
+  try:
+    return open(_LIGHT_SHM, encoding="utf-8").read().strip() or None
+  except Exception:
+    return None
+
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/iqlink_nav_run.jsonl"
 SECS = float(sys.argv[2]) if len(sys.argv) > 2 else 300.0
 
@@ -69,7 +78,7 @@ with open(OUT, "w", encoding="utf-8") as f:
       "speedTarget_ms": round(float(getattr(n, "speedTarget", 0) or 0), 4),
       "accelTarget": round(float(getattr(n, "accelTarget", 0) or 0), 4),
       "cameraType": jsafe(getattr(n, "cameraType", None)),
-      "trafficLight": jsafe(getattr(n, "trafficLight", None)),
+      "trafficLight": _shm_light(),
     }
     key = (
       row["active"],

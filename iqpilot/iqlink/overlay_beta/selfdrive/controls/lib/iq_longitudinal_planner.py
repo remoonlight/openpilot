@@ -2,6 +2,8 @@
 Copyright © IQ.Lvbs, apart of Project Teal Lvbs, All Rights Reserved, licensed under https://konn3kt.com/tos
 """
 from datetime import datetime
+import os
+import time
 
 import numpy as np
 
@@ -39,6 +41,17 @@ def nav_long_blocked_by_gear(gear) -> bool:
 def nav_long_blocked(gear, *, link_warn: bool = False) -> bool:
   """Also drop nav long while BLE is stale (snapshot kept, speed no longer live)."""
   return nav_long_blocked_by_gear(gear) or bool(link_warn)
+
+
+# ponytail: tmpfs sidecar; official IQNavState has no trafficLight field.
+def read_iqlink_traffic_light(path="/dev/shm/iqlink_traffic_light", max_age_s=3.0) -> str:
+  try:
+    if (time.time() - os.stat(path).st_mtime) > float(max_age_s):
+      return "none"
+    color = open(path, encoding="utf-8").read().strip().split()[:1]
+    return (color[0].strip().lower() if color else "none") or "none"
+  except Exception:
+    return "none"
 
 
 def iqlink_nav_go(*, nav_valid, nav_stop_request, nav_speed_target, nav_accel_target,
@@ -155,7 +168,7 @@ class LongitudinalPlannerIQ:
     self.nav_state = getattr(nav_state, "longitudinalState", NavLongitudinalState.disabled)
     self.nav_speed_target = float(getattr(nav_state, "speedTarget", 0.0))
     self.nav_accel_target = float(getattr(nav_state, "accelTarget", 0.0))
-    self.nav_traffic_light = str(getattr(nav_state, "trafficLight", "none") or "none")
+    self.nav_traffic_light = read_iqlink_traffic_light()
     self.nav_valid = bool(getattr(nav_state, "valid", False) and self.nav_engaged)
     self.nav_stop_request = bool(self.nav_valid and self.nav_speed_target <= 0.0)
 

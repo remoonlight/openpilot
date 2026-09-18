@@ -1,4 +1,6 @@
 """Park/reverse and single-light hold helpers (no cereal import)."""
+import os
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,7 +14,7 @@ def _load_helpers():
   src = _PLANNER.read_text(encoding="utf-8")
   start = src.index("def nav_long_blocked_by_gear")
   end = src.index("\nclass LongitudinalPlannerIQ")
-  ns = {"_GEAR": SimpleNamespace(park="park", reverse="reverse", drive="drive")}
+  ns = {"_GEAR": SimpleNamespace(park="park", reverse="reverse", drive="drive"), "os": os, "time": time}
   exec(src[start:end], ns)
   return ns
 
@@ -22,6 +24,7 @@ nav_long_blocked_by_gear = _H["nav_long_blocked_by_gear"]
 nav_long_blocked = _H["nav_long_blocked"]
 iqlink_nav_go = _H["iqlink_nav_go"]
 hold_at_standstill = _H["hold_at_standstill"]
+read_iqlink_traffic_light = _H["read_iqlink_traffic_light"]
 _GEAR = _H["_GEAR"]
 
 
@@ -95,3 +98,22 @@ def test_iqlink_nav_go_apk_green():
     nav_valid=True, nav_stop_request=False, nav_speed_target=60 / 3.6, nav_accel_target=-2.0,
     traffic_light="green",
   ) is True
+
+
+def test_read_iqlink_traffic_light_fresh_green(tmp_path):
+  p = tmp_path / "iqlink_traffic_light"
+  p.write_text("green 12", encoding="utf-8")
+  color = read_iqlink_traffic_light(str(p), max_age_s=3.0)
+  assert color == "green"
+  assert iqlink_nav_go(
+    nav_valid=True, nav_stop_request=False, nav_speed_target=60 / 3.6, nav_accel_target=0.0,
+    traffic_light=color,
+  ) is True
+
+
+def test_read_iqlink_traffic_light_stale_green(tmp_path):
+  p = tmp_path / "iqlink_traffic_light"
+  p.write_text("green 12", encoding="utf-8")
+  past = time.time() - 10
+  os.utime(p, (past, past))
+  assert read_iqlink_traffic_light(str(p), max_age_s=3.0) == "none"
