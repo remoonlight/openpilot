@@ -70,6 +70,20 @@ class Controls(ControlsExt):
 
     self.LaC = ControlsExt.initialize_lateral_control(self, self.LaC, self.CI, DT_CTRL)
 
+  def update_torque_controller(self):
+    if not self.uses_torque_steer() or self.CP.lateralTuning.which() != 'torque':
+      return
+
+    torque_params = self.sm['lateralTorqueParameters']
+    if self.sm.all_checks(['lateralTorqueParameters']) and torque_params.useParams:
+      self.LaC.update_torque_parameters(torque_params.latAccelFactorFiltered, torque_params.latAccelOffsetFiltered,
+                                         torque_params.frictionCoefficientFiltered)
+
+      self.LaC.extension.update_limits()
+
+    self.LaC.extension.update_model_v2(self.sm['modelV2'])
+    self.LaC.extension.update_lateral_lag(self.lat_delay)
+
   def update(self):
     self.sm.update(15)
     if self.sm.updated["extrinsicsCalibration"]:
@@ -90,18 +104,7 @@ class Controls(ControlsExt):
     steer_angle_without_offset = math.radians(CS.steeringAngleDeg - lp.angleOffsetDeg)
     self.curvature = -self.VM.calc_curvature(steer_angle_without_offset, CS.vEgo, lp.roll)
 
-    # Update Torque Params
-    if self.CP.lateralTuning.which() == 'torque':
-      torque_params = self.sm['lateralTorqueParameters']
-      if self.sm.all_checks(['lateralTorqueParameters']) and torque_params.useParams:
-        self.LaC.update_torque_parameters(torque_params.latAccelFactorFiltered, torque_params.latAccelOffsetFiltered,
-                                           torque_params.frictionCoefficientFiltered)
-
-        self.LaC.extension.update_limits()
-
-      self.LaC.extension.update_model_v2(self.sm['modelV2'])
-
-      self.LaC.extension.update_lateral_lag(self.lat_delay)
+    self.update_torque_controller()
 
     long_plan = self.sm['longitudinalPlan']
     model_v2 = self.sm['modelV2']

@@ -34,7 +34,13 @@ class ControlsExt(ModelStateBase):
     self.sm_services_ext = ['radarState', 'selfdriveStateSP']
     self.pm_services_ext = ['carControlSP']
 
+  def uses_torque_steer(self) -> bool:
+    return self.CP.steerControlType == structs.CarParams.SteerControlType.torque
+
   def initialize_lateral_control(self, lac, CI, dt):
+    if not self.uses_torque_steer():
+      return lac
+
     enforce_torque_control = self.params.get_bool("EnforceTorqueControl")
     torque_versions = self.params.get("TorqueControlTune")
     if not enforce_torque_control:
@@ -51,7 +57,7 @@ class ControlsExt(ModelStateBase):
     if time.monotonic() - self._param_update_time > PARAMS_UPDATE_PERIOD:
       self.blinker_pause_lateral.get_params()
 
-      if self.CP.lateralTuning.which() == 'torque':
+      if self.uses_torque_steer() and self.CP.lateralTuning.which() == 'torque':
         self.lat_delay = get_lat_delay(self.params, sm["lateralDelay"].lateralDelay)
 
       self._param_update_time = time.monotonic()
