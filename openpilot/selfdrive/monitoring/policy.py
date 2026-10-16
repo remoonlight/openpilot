@@ -31,9 +31,10 @@ class DRIVER_MONITOR_SETTINGS:
     self._WHEELTOUCH_POLICY_ALERT_1_TIMEOUT = 5.
     self._WHEELTOUCH_POLICY_ALERT_2_TIMEOUT = 15.
     self._WHEELTOUCH_POLICY_ALERT_3_TIMEOUT = 25.
-    self._VISION_POLICY_ALERT_1_TIMEOUT = 5.
+    self._VISION_POLICY_ALERT_1_TIMEOUT = 6.
     self._VISION_POLICY_ALERT_2_TIMEOUT = 8.
     self._VISION_POLICY_ALERT_3_TIMEOUT = 13.
+    self._VISION_POLICY_LOW_SPEED_TIMEOUT = 5.  # preserve stopped awareness independently of the first reminder
 
     # no response = alert_3 sustained for certain amount of time
     self._NO_RESPONSE_TIMEOUT = 5.
@@ -336,9 +337,10 @@ class DriverMonitoring:
       return
 
     awareness_prev = self.awareness
-    _reaching_alert_1 = self.awareness - self.step_change <= self.threshold_alert_1
     _reaching_alert_3 = self.awareness - self.step_change <= 0
-    lowspeed_exemption = lowspeed and _reaching_alert_1
+    lowspeed_threshold = (1. - self.settings._VISION_POLICY_LOW_SPEED_TIMEOUT / self.settings._VISION_POLICY_ALERT_3_TIMEOUT
+                         if self.active_policy == MonitoringPolicy.vision else self.threshold_alert_1)
+    lowspeed_exemption = lowspeed and self.awareness - self.step_change <= lowspeed_threshold
     always_on_exemption = always_on_valid and not op_engaged and _reaching_alert_3
 
     if self.awareness > 0 and \
