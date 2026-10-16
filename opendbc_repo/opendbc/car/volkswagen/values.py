@@ -384,6 +384,13 @@ class CAR(Platforms):
     chassis_codes={"5G", "AU", "BA", "BE"},
     wmis={WMI.VOLKSWAGEN_MEXICO_CAR, WMI.VOLKSWAGEN_EUROPE_CAR},
   )
+  VOLKSWAGEN_ID3_MK2 = VolkswagenMEBPlatformConfig(
+    [VWCarDocs("Volkswagen ID.3 2024-25", car_parts=CarParts.common([CarHarness.vw_meb]), footnotes=[])],
+    VolkswagenCarSpecs(mass=1935, wheelbase=2.77),
+    chassis_codes={"E9"},
+    wmis={WMI.SAIC_VOLKSWAGEN},
+    flags=VolkswagenFlags.MEB_GEN2,
+  )
   VOLKSWAGEN_ID4_MK1 = VolkswagenMEBPlatformConfig(
     [
       VWCarDocs("Volkswagen ID.4 2021-23", car_parts=CarParts.common([CarHarness.vw_meb]), footnotes=[]),

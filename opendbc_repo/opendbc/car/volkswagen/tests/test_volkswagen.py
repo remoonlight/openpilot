@@ -3,9 +3,11 @@ import re
 import unittest
 
 from opendbc.car import DT_CTRL
+from opendbc.car.docs_definitions import CarHarness
 from opendbc.car.structs import CarParams
 from opendbc.car.volkswagen.carcontroller import HCAMitigation
-from opendbc.car.volkswagen.values import CAR, CarControllerParams as CCP, FW_QUERY_CONFIG, WMI
+from opendbc.car.volkswagen.interface import CarInterface
+from opendbc.car.volkswagen.values import CAR, CarControllerParams as CCP, FW_QUERY_CONFIG, WMI, VolkswagenFlags, VolkswagenSafetyFlags
 from opendbc.car.volkswagen.fingerprints import FW_VERSIONS
 
 Ecu = CarParams.Ecu
@@ -13,6 +15,39 @@ Ecu = CarParams.Ecu
 CHASSIS_CODE_PATTERN = re.compile('[A-Z0-9]{2}')
 # TODO: determine the unknown groups
 SPARE_PART_FW_PATTERN = re.compile(b'\xf1\x87(?P<gateway>[0-9][0-9A-Z]{2})(?P<unknown>[0-9][0-9A-Z][0-9])(?P<unknown2>[0-9A-Z]{2}[0-9])([A-Z0-9]| )')
+
+
+class TestVolkswagenID3MEBGen2(unittest.TestCase):
+  def test_gateway_parameters(self):
+    fingerprint = {0: {0x25D: 8, 0x3DC: 8}, 1: {0x520: 8}, 2: {}}
+    CP = CarInterface.get_params(CAR.VOLKSWAGEN_ID3_MK2, fingerprint, [], False, False, False)
+    self.assertEqual(CP.carFingerprint, CAR.VOLKSWAGEN_ID3_MK2)
+    self.assertEqual(CP.steerControlType, CarParams.SteerControlType.curvature)
+    self.assertEqual(CP.lateralTuning.which(), 'pid')
+    self.assertTrue(CP.flags & VolkswagenFlags.MEB_GEN2)
+    self.assertTrue(CP.openpilotLongitudinalControl)
+    self.assertFalse(CP.dashcamOnly)
+    self.assertEqual(CP.safetyConfigs[-1].safetyModel, CarParams.SafetyModel.volkswagenMeb)
+    self.assertTrue(CP.safetyConfigs[-1].safetyParam & VolkswagenSafetyFlags.MEB_ALT_CRC)
+    self.assertEqual(CP.maxLateralAccel, 2.5)
+
+  def test_radar_fingerprint(self):
+    radar_key = (Ecu.fwdRadar, 0x757, None)
+    radar_fw = b'\xf1\x871EA907567D \xf1\x890250'
+    self.assertIn(radar_fw, FW_VERSIONS[CAR.VOLKSWAGEN_ID3_MK2][radar_key])
+    self.assertNotIn(radar_fw, FW_VERSIONS[CAR.VOLKSWAGEN_ID4_MK2][radar_key])
+    for wmi, expected in ((WMI.SAIC_VOLKSWAGEN, {CAR.VOLKSWAGEN_ID3_MK2}), (WMI.VOLKSWAGEN_EUROPE_CAR, set())):
+      with self.subTest(wmi=wmi):
+        vin = list('0' * 17)
+        vin[0:3] = wmi
+        vin[6:8] = 'E9'
+        matches = FW_QUERY_CONFIG.match_fw_to_car_fuzzy({(0x757, None): [radar_fw]}, ''.join(vin), FW_VERSIONS)
+        self.assertEqual(matches, expected)
+
+  def test_documented_harness(self):
+    for doc in CAR.VOLKSWAGEN_ID3_MK2.config.car_docs:
+      self.assertIn(CarHarness.vw_meb, doc.car_parts.parts)
+      self.assertNotIn(CarHarness.vw_j533, doc.car_parts.parts)
 
 
 class TestVolkswagenHCAMitigation(unittest.TestCase):
