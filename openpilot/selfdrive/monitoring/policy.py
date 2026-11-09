@@ -31,9 +31,10 @@ class DRIVER_MONITOR_SETTINGS:
     self._WHEELTOUCH_POLICY_ALERT_1_TIMEOUT = 5.
     self._WHEELTOUCH_POLICY_ALERT_2_TIMEOUT = 15.
     self._WHEELTOUCH_POLICY_ALERT_3_TIMEOUT = 25.
-    self._VISION_POLICY_ALERT_1_TIMEOUT = 5.
+    self._VISION_POLICY_ALERT_1_TIMEOUT = 6.
     self._VISION_POLICY_ALERT_2_TIMEOUT = 8.
     self._VISION_POLICY_ALERT_3_TIMEOUT = 13.
+    self._VISION_POLICY_LOW_SPEED_TIMEOUT = 5.  # preserve stopped awareness independently of the first reminder
 
     # no response = alert_3 sustained for certain amount of time
     self._NO_RESPONSE_TIMEOUT = 5.
@@ -51,6 +52,7 @@ class DRIVER_MONITOR_SETTINGS:
     self._SG_THRESHOLD = 0.9
     self._BLINK_THRESHOLD = 0.865
     self._PHONE_THRESH = 0.5
+    self._SLEEP_THRESH = 0.75
     self._POSE_PITCH_THRESHOLD = 0.3133
     self._POSE_PITCH_THRESHOLD_SLACK = 0.3237
     self._POSE_PITCH_THRESHOLD_STRICT = self._POSE_PITCH_THRESHOLD
@@ -138,6 +140,7 @@ class DriverMonitoring:
     self.pose = DriverPose(settings=self.settings)
     self.blink = DriverBlink()
     self.phone_prob = 0.
+    self.sleep_prob = 0.
 
     self.alert_level = AlertLevel.none
     self.always_on = always_on
@@ -240,6 +243,7 @@ class DriverMonitoring:
     self.distracted_types['pose'] = bool((pitch_error > pitch_threshold) or (yaw_error > yaw_threshold))
     self.distracted_types['eye'] = bool((self.blink.left + self.blink.right)*0.5 > self.settings._BLINK_THRESHOLD)
     self.distracted_types['phone'] = bool(self.phone_prob > self.settings._PHONE_THRESH)
+    self.distracted_types['sleep'] = bool(self.sleep_prob > self.settings._SLEEP_THRESH)
 
   def _update_states(self, driver_state, cal_rpy, car_speed, op_engaged, lowspeed, demo_mode=False, steering_angle_deg=0.):
     rhd_pred = driver_state.wheelOnRightProb
@@ -277,6 +281,7 @@ class DriverMonitoring:
     self.blink.right = driver_data.rightBlinkProb * (driver_data.rightEyeProb > self.settings._EYE_THRESHOLD) \
                       * (driver_data.sunglassesProb < self.settings._SG_THRESHOLD)
     self.phone_prob = driver_data.phoneProb
+    self.sleep_prob = driver_data.sleepProb
 
     self._get_distracted_types()
     self.driver_distracted = any(self.distracted_types.values()) and driver_data.faceProb > self.settings._FACE_THRESHOLD and self.pose.low_std
@@ -336,9 +341,10 @@ class DriverMonitoring:
       return
 
     awareness_prev = self.awareness
-    _reaching_alert_1 = self.awareness - self.step_change <= self.threshold_alert_1
     _reaching_alert_3 = self.awareness - self.step_change <= 0
-    lowspeed_exemption = lowspeed and _reaching_alert_1
+    lowspeed_threshold = (1. - self.settings._VISION_POLICY_LOW_SPEED_TIMEOUT / self.settings._VISION_POLICY_ALERT_3_TIMEOUT
+                         if self.active_policy == MonitoringPolicy.vision else self.threshold_alert_1)
+    lowspeed_exemption = lowspeed and self.awareness - self.step_change <= lowspeed_threshold
     always_on_exemption = always_on_valid and not op_engaged and _reaching_alert_3
 
     if self.awareness > 0 and \
@@ -406,6 +412,7 @@ class DriverMonitoring:
     dm.visionPolicyState.distractedTypes.pose = self.distracted_types['pose']
     dm.visionPolicyState.distractedTypes.eye = self.distracted_types['eye']
     dm.visionPolicyState.distractedTypes.phone = self.distracted_types['phone']
+    dm.visionPolicyState.distractedTypes.sleep = self.distracted_types['sleep']
     dm.visionPolicyState.faceDetected = self.face_detected
     dm.visionPolicyState.pose.pitch = self.pose.pitch
     dm.visionPolicyState.pose.yaw = self.pose.yaw

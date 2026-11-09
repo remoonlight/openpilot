@@ -28,6 +28,7 @@ def make_msg(face_detected, distracted=False, model_uncertain=False):
   ds.leftDriverData.facePositionStd = [1.*model_uncertain, 1.*model_uncertain]
   # TODO: test both separately when e2e is used
   ds.leftDriverData.phoneProb = 0.
+  ds.leftDriverData.sleepProb = 0.
   return ds
 
 
@@ -83,6 +84,42 @@ class TestMonitoring(OpenpilotTestCase):
     assert alert_lvls[int((s._VISION_POLICY_ALERT_3_TIMEOUT + \
                     (TEST_TIMESPAN - 10 - s._VISION_POLICY_ALERT_3_TIMEOUT) / 2) / DT_DMON)] == 3
     assert isinstance(d_status.awareness, float)
+
+  @parameterized.expand([('moving',), ('traffic_light',), ('attention_recovery',)])
+  def test_first_reminder_delay_preserves_escalation(self, scenario):
+    original_settings = DRIVER_MONITOR_SETTINGS()
+    original_settings._VISION_POLICY_ALERT_1_TIMEOUT = 5.
+    original = DriverMonitoring(settings=original_settings)
+    delayed = DriverMonitoring()
+    first_original = first_delayed = None
+    different_reminders = 0
+    for idx in range(len(always_distracted)):
+      elapsed = idx * DT_DMON
+      msg = msg_ATTENTIVE if scenario == 'attention_recovery' and 7. <= elapsed < 11. else msg_DISTRACTED
+      lowspeed = scenario == 'traffic_light' and elapsed < 60.
+      for dm in (original, delayed):
+        dm._update_states(msg, [0, 0, 0], 0, True, lowspeed)
+        dm._update_events(False, True, lowspeed, False)
+      self.assertEqual(delayed.awareness, original.awareness)
+      self.assertEqual(delayed.alert_3_cnt, original.alert_3_cnt)
+      self.assertEqual(delayed.no_response_cnt, original.no_response_cnt)
+      self.assertEqual(delayed.lockout_active, original.lockout_active)
+      self.assertEqual(delayed.lockout_count, original.lockout_count)
+      self.assertEqual(delayed.lockout_time_elapsed, original.lockout_time_elapsed)
+      if original.alert_level >= 2:
+        self.assertEqual(delayed.alert_level, original.alert_level)
+      if delayed.alert_level != original.alert_level:
+        self.assertEqual(original.alert_level, 1)
+        self.assertEqual(delayed.alert_level, 0)
+        different_reminders += 1
+      if original.alert_level == 1 and first_original is None:
+        first_original = idx
+      if delayed.alert_level == 1 and first_delayed is None:
+        first_delayed = idx
+    self.assertGreater(different_reminders, 0)
+    self.assertIsNotNone(first_original)
+    self.assertIsNotNone(first_delayed)
+    self.assertAlmostEqual((first_delayed - first_original) * DT_DMON, 1., delta=DT_DMON)
 
   # engaged, distracted past red and beyond the no-response window -> unavailability response + lockout
   def test_distracted_lockout(self):
@@ -204,9 +241,11 @@ class TestMonitoring(OpenpilotTestCase):
     alert_lvls, d_status = self._run_seq(always_distracted, always_false, always_true, lowspeed_vector)
     s = d_status.settings
     assert alert_lvls[int((_redlight_time-0.1)/DT_DMON)] == 0
-    _alert_1_to_2 = s._VISION_POLICY_ALERT_2_TIMEOUT - s._VISION_POLICY_ALERT_1_TIMEOUT
-    assert alert_lvls[int((_redlight_time+0.5)/DT_DMON)] == 1
-    assert alert_lvls[int((_redlight_time+_alert_1_to_2+0.5)/DT_DMON)] == 2
+    _resume_to_alert_1 = s._VISION_POLICY_ALERT_1_TIMEOUT - s._VISION_POLICY_LOW_SPEED_TIMEOUT
+    _resume_to_alert_2 = s._VISION_POLICY_ALERT_2_TIMEOUT - s._VISION_POLICY_LOW_SPEED_TIMEOUT
+    assert alert_lvls[int((_redlight_time+0.5)/DT_DMON)] == 0
+    assert alert_lvls[int((_redlight_time+_resume_to_alert_1+0.5)/DT_DMON)] == 1
+    assert alert_lvls[int((_redlight_time+_resume_to_alert_2+0.5)/DT_DMON)] == 2
 
   # engaged, distracted while moving, then car stops after reaching orange
   #  - should reset timer to pre green at low speed

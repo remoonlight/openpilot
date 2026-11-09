@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 // TODO: time should just be passed into the hooks we expose
 uint32_t timer_cnt = 0;
@@ -13,8 +14,16 @@ uint32_t microsecond_timer_get(void) {
 #include "opendbc/safety/safety.h"
 #include "opendbc/safety/ignition.h"
 
-void safety_tick_current_safety_config() {
-  safety_tick(&current_safety_config);
+uint32_t can_packet_size(void) {
+  return (uint32_t)sizeof(CANPacket_t);
+}
+
+uint32_t can_packet_checksum_offset(void) {
+  return (uint32_t)offsetof(CANPacket_t, checksum);
+}
+
+uint32_t can_packet_data_offset(void) {
+  return (uint32_t)offsetof(CANPacket_t, data);
 }
 
 bool safety_config_valid() {
@@ -50,12 +59,48 @@ void tick_mads_state(bool vm, bool acc_main, bool op_allowed, bool braking, bool
   mads_state_update(vm, acc_main, op_allowed, braking, steering_disengage);
 }
 
-void set_relay_malfunction(bool c){
-  relay_malfunction = c;
+void set_unseen_rx_checks_valid(void){
+  for (int i = 0; i < current_safety_config.rx_checks_len; i++) {
+    RxStatus *status = &current_safety_config.rx_checks[i].status;
+    if (!status->msg_seen) {
+      status->msg_seen = true;
+      status->index = 0;
+      status->valid_checksum = true;
+      status->wrong_counters = 0;
+      status->valid_quality_flag = true;
+      status->last_timestamp = microsecond_timer_get();
+      status->lagging = false;
+    }
+  }
 }
 
-void set_ignition_can(bool c){
-  ignition_can = c;
+int get_ignore_frequency_check_count(void){
+  int count = 0;
+  for (int i = 0; i < current_safety_config.rx_checks_len; i++) {
+    for (uint8_t j = 0U; (j < MAX_ADDR_CHECK_MSGS) && (current_safety_config.rx_checks[i].msg[j].addr != 0); j++) {
+      if (current_safety_config.rx_checks[i].msg[j].ignore_frequency_check) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+bool get_rx_check_ignore_frequency(int addr, int bus){
+  bool ignore = false;
+  for (int i = 0; i < current_safety_config.rx_checks_len; i++) {
+    for (uint8_t j = 0U; (j < MAX_ADDR_CHECK_MSGS) && (current_safety_config.rx_checks[i].msg[j].addr != 0); j++) {
+      const CanMsgCheck *msg = &current_safety_config.rx_checks[i].msg[j];
+      if ((msg->addr == addr) && ((int)msg->bus == bus) && msg->ignore_frequency_check) {
+        ignore = true;
+      }
+    }
+  }
+  return ignore;
+}
+
+void set_relay_malfunction(bool c){
+  relay_malfunction = c;
 }
 
 bool get_controls_allowed(void){
@@ -64,10 +109,6 @@ bool get_controls_allowed(void){
 
 bool get_ignition_can(void){
   return ignition_can;
-}
-
-int get_alternative_experience(void){
-  return alternative_experience;
 }
 
 bool get_relay_malfunction(void){
@@ -168,10 +209,6 @@ void set_desired_angle_last(int t){
   desired_angle_last = t;
 }
 
-int get_desired_angle_last(void){
-  return desired_angle_last;
-}
-
 void set_angle_meas(int min, int max){
   angle_meas.min = min;
   angle_meas.max = max;
@@ -211,14 +248,6 @@ int get_curvature_meas_max(void){
 
 void set_honda_alt_brake_msg(bool c){
   honda_alt_brake_msg = c;
-}
-
-void set_honda_bosch_long(bool c){
-  honda_bosch_long = c;
-}
-
-int get_honda_hw(void) {
-  return honda_hw;
 }
 
 void set_honda_fwd_brake(bool c){

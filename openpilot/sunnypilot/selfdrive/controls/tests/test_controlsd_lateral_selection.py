@@ -44,21 +44,20 @@ def _ext(CP, enforce=False, tune=0.0):
 class TestControlsdLateralSelection(unittest.TestCase):
 
   @parameterized.expand([
-    (SteerControlType.angle, False, 0.0),
-    (SteerControlType.angle, True, 0.0),
-    (SteerControlType.angle, True, 1.0),
-    (SteerControlType.curvature, False, 0.0),
-    (SteerControlType.curvature, True, 0.0),
-    (SteerControlType.curvature, True, 1.0),
+    (steer_type, enforce, tune, tuning)
+    for steer_type in (SteerControlType.angle, SteerControlType.curvature)
+    for enforce, tune in ((False, 0.0), (True, 0.0), (True, 1.0))
+    for tuning in ('pid', 'torque')
   ])
-  def test_preserves_angle_curvature_under_torque_tuning(self, steer_type, enforce, tune):
-    ext = _ext(_cp(steer_type, 'torque'), enforce=enforce, tune=tune)
+  def test_preserves_angle_curvature_under_torque_tuning(self, steer_type, enforce, tune, tuning):
+    ext = _ext(_cp(steer_type, tuning), enforce=enforce, tune=tune)
     with mock.patch(
       "openpilot.sunnypilot.selfdrive.controls.controlsd_ext.LatControlTorqueV0",
       return_value=V0,
     ) as ctor:
       assert ext.initialize_lateral_control(STOCK, None, 0.01) is STOCK
       ctor.assert_not_called()
+      self.assertEqual(ext.params.mock_calls, [])
 
   @parameterized.expand([
     (False, 0.0, V0),
@@ -105,9 +104,14 @@ class TestControlsdLateralSelection(unittest.TestCase):
       get_lat_delay.assert_called_once()
       assert ext.lat_delay == 0.25
 
-  def test_update_torque_controller_skips_curvature(self):
+  @parameterized.expand([
+    (steer_type, tuning)
+    for steer_type in (SteerControlType.angle, SteerControlType.curvature)
+    for tuning in ('pid', 'torque')
+  ])
+  def test_update_torque_controller_skips_non_torque_steering(self, steer_type, tuning):
     controls = Controls.__new__(Controls)
-    controls.CP = _cp(SteerControlType.curvature, 'torque')
+    controls.CP = _cp(steer_type, tuning)
     controls.LaC = mock.Mock(spec=["update"])
     controls.sm = mock.MagicMock()
     controls.update_torque_controller()
