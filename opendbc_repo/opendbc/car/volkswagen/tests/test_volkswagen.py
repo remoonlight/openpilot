@@ -7,7 +7,7 @@ from opendbc.car.docs_definitions import CarHarness
 from opendbc.car.structs import CarParams
 from opendbc.car.volkswagen.carcontroller import HCAMitigation
 from opendbc.car.volkswagen.interface import CarInterface
-from opendbc.car.volkswagen.values import CAR, CarControllerParams as CCP, FW_QUERY_CONFIG, WMI, VolkswagenFlags, VolkswagenSafetyFlags
+from opendbc.car.volkswagen.values import CAR, DBC, CarControllerParams as CCP, FW_QUERY_CONFIG, WMI, VolkswagenFlags, VolkswagenSafetyFlags
 from opendbc.car.volkswagen.fingerprints import FW_VERSIONS
 
 Ecu = CarParams.Ecu
@@ -30,6 +30,20 @@ class TestVolkswagenID3MEBGen2(unittest.TestCase):
     self.assertEqual(CP.safetyConfigs[-1].safetyModel, CarParams.SafetyModel.volkswagenMeb)
     self.assertTrue(CP.safetyConfigs[-1].safetyParam & VolkswagenSafetyFlags.MEB_ALT_CRC)
     self.assertEqual(CP.maxLateralAccel, 2.5)
+    self.assertAlmostEqual(CP.wheelbase, 2.77)
+    self.assertEqual(CP.networkLocation, CarParams.NetworkLocation.gateway)
+
+  def test_gateway_detection_alternate_messages(self):
+    for address in (0x520, 0x86, 0xFD, 0x13D):
+      with self.subTest(address=address):
+        CP = CarInterface.get_params(CAR.VOLKSWAGEN_ID3_MK2, {0: {}, 1: {address: 8}, 2: {}}, [], False, False, False)
+        self.assertEqual(CP.steerControlType, CarParams.SteerControlType.curvature)
+        self.assertEqual(CP.networkLocation, CarParams.NetworkLocation.gateway)
+        self.assertTrue(CP.openpilotLongitudinalControl)
+        self.assertTrue(CP.safetyConfigs[-1].safetyParam & VolkswagenSafetyFlags.MEB_ALT_CRC)
+
+  def test_gen2_dbc_selection(self):
+    self.assertEqual(set(DBC[CAR.VOLKSWAGEN_ID3_MK2].values()), {'vw_meb_2024_generated'})
 
   def test_radar_fingerprint(self):
     radar_key = (Ecu.fwdRadar, 0x757, None)
